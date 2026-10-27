@@ -2,7 +2,7 @@
 
 Aplicação web Full Stack para **controle de estoque e de validade de produtos**, voltada a pequenos mercados, mercearias e minimercados. Projeto acadêmico.
 
-> **Estado atual: Fases 1 e 2 concluídas e homologadas; Fase 3 (classificação de validade e filtros) implementada e verificada por testes automatizados — a validação manual da Fase 3 está PENDENTE do usuário.** Dashboard e valor em risco (Fase 4) **ainda não existem**.
+> **Estado atual: Fases 1, 2 e 3 homologadas (validação manual da Fase 3 informada pelo usuário). Fase 4 (indicadores e valor em risco) implementada e verificada por testes automatizados — a validação manual da Fase 4 está PENDENTE do usuário.** Fases 5 e 6 ainda não foram iniciadas.
 
 ## Homologação da Fase 2
 
@@ -40,7 +40,7 @@ Pequenos mercados, mercearias, minimercados e estabelecimentos com produtos de p
 |---|---|
 | ✅ Implementado e testado | RF01 cadastrar · RF02 listar (ordenado por validade) · RF03 editar com validação · RF04 excluir com confirmação · pesquisa por nome/código · paginação · validação (frontend e backend) |
 | ✅ Implementado e testado automaticamente (Fase 3); validação manual pendente | RF05 classificar vencido / a vencer / dentro da validade (`situacao`) · RF06 filtrar por situação e por categoria, combinados com busca e paginação · selo com cor **e** texto |
-| ⏳ Pendente (Fase 4) | Dashboard com 4 indicadores · RF07 valor em risco |
+| ✅ Implementado e testado automaticamente (Fase 4); validação manual pendente | Dashboard com 4 indicadores (total de produtos, vencidos, a vencer em 7 dias, valor estimado em risco) · RF07 valor em risco (RN04) |
 | ⏳ Pendente (Fase 5) | Testes de fronteira de validade, responsividade e mensagens refinadas |
 | 💡 Opcional (Fase 6) | Exportação CSV, relatório PDF, alerta de estoque baixo |
 
@@ -80,16 +80,16 @@ desperdicio-zero/
 │   │   ├── server.js              # abre o banco e escuta a porta
 │   │   ├── erros.js               # ErroApp (status HTTP + detalhes)
 │   │   ├── db/                    # connection.js (abre SQLite) e schema.sql
-│   │   ├── routes/                # health.js, produtos.js, categorias.js
+│   │   ├── routes/                # health.js, produtos.js, categorias.js, indicadores.js
 │   │   ├── controllers/           # camada HTTP
-│   │   ├── services/              # produtoService (CRUD, filtros, paginação) e validadeService (RN01–RN03, data local)
+│   │   ├── services/              # produtoService (CRUD, filtros, paginação), validadeService (RN01–RN03, data local), indicadoresService (RN04 e indicadores)
 │   │   ├── validators/produto.js  # validação de produto e de data real
 │   │   └── models/                # acesso ao SQLite
 │   ├── test/                      # testes node:test
 │   └── data/                      # produtos.db (ignorado pelo git)
 ├── frontend/
 │   ├── src/
-│   │   ├── components/            # Sidebar, Header, SeloSituacao, ProdutoCard, ProdutoForm, Modal, ConfirmarExclusao, Icones
+│   │   ├── components/            # Sidebar, Header, Indicadores, SeloSituacao, ProdutoCard, ProdutoForm, Modal, ConfirmarExclusao, Icones
 │   │   ├── pages/                 # HomePage, ProdutosPage
 │   │   ├── services/api.js        # comunicação com a API
 │   │   └── utils/                 # moeda.js (reais↔centavos), data.js (apresentação)
@@ -118,7 +118,7 @@ desperdicio-zero/
 | RN01 | Vencido = `data_validade < hoje` (hoje não é vencido) | ✅ Implementado e testado automaticamente |
 | RN02 | A vencer (`proximo`) = `hoje ≤ validade ≤ hoje+7` (limites inclusivos) | ✅ Implementado e testado automaticamente |
 | RN03 | Dentro da validade (`dentro`) = `validade > hoje+7` | ✅ Implementado e testado automaticamente |
-| RN04 | Valor em risco = Σ(quantidade × preço) dos "próximos"; vencidos fora | ⏳ Fase 4 |
+| RN04 | Valor em risco = Σ(quantidade × preço) dos "próximos"; vencidos fora | ✅ Implementado e testado automaticamente |
 | RN05 | quantidade ≥ 0 e preço ≥ 0, em inteiros (centavos) | ✅ Implementado e testado |
 | RN06 | Ordenação por `data_validade ASC, id ASC` (estável) | ✅ Implementado e testado |
 | RN07 | MVP só alerta, sem bloqueios | — |
@@ -132,7 +132,25 @@ desperdicio-zero/
 - **Um só conjunto de limites** serve para classificar e para filtrar no SQL (`intervaloSituacao`), então o campo `situacao` e o filtro `?situacao=` nunca divergem.
 - Datas inválidas ou fora de `YYYY-MM-DD` real são recusadas.
 
-**Decisões registradas.** (1) O PDF chama as RNs de "propostas a confirmar" e o `claude.md` de "definidas"; o usuário decidiu adotá-las como definidas. (2) Textos de dias restantes ("vence em 3 dias") ficaram fora do escopo. (3) O PDF deixa em aberto se quantidade 0 é permitida; `claude.md` fixa `≥ 0` — adotado `≥ 0`.
+**Indicadores e valor em risco (Fase 4, RN04).** Definidos em `backend/src/services/indicadoresService.js`; o frontend só exibe os números recebidos de `GET /api/indicadores`.
+
+| Indicador | Campo da API | Definição |
+|---|---|---|
+| Total de produtos | `total_produtos` | Número de **produtos diferentes** cadastrados (linhas de `produtos`). Não é o total de unidades |
+| Produtos vencidos | `produtos_vencidos` | Produtos com situação `vencido` (RN01: `validade < hoje`) |
+| A vencer em 7 dias | `produtos_a_vencer` | Produtos com situação `proximo` (RN02: `hoje ≤ validade ≤ hoje+7`, hoje incluído) |
+| Valor estimado em risco | `valor_em_risco` | **Σ (quantidade × preco_unitario)** dos produtos a vencer, em **centavos inteiros** |
+
+- **Quem entra no valor em risco:** só a janela `hoje … hoje+7`. **Não entram** vencidos nem produtos dentro da validade.
+- **Quantidade 0 ou preço 0:** o produto continua contando em "a vencer" e contribui com R$ 0,00.
+- **Sem produtos elegíveis (ou sem produtos):** todos os indicadores são 0; o valor é R$ 0,00.
+- **Exemplo do PDF:** A (10 × R$ 5,00) + B (8 × R$ 3,00) = 10×500 + 8×300 = 5000 + 2400 = **7400 centavos** → R$ 74,00.
+- **Estimativa, não prejuízo:** o texto da interface descreve o valor como estimativa; o sistema não sabe se o produto será vendido, devolvido ou descartado.
+- **Escopo:** os indicadores são sempre do **estoque inteiro**; busca, categoria e situação da listagem não os alteram. O valor de produtos vencidos **não** é apresentado em separado (o PDF deixa a critério da equipe; a interface mostra só a contagem de vencidos).
+- **Precisão:** a soma é feita em inteiros no SQLite, lida como `BigInt` e só convertida para número quando cabe nos inteiros seguros do JavaScript (≤ 9.007.199.254.740.991 centavos); acima disso a API responde 500 genérico em vez de devolver um valor impreciso. O formato `R$ 1.234,56` é produzido no frontend por aritmética inteira, sem ponto flutuante.
+- **Mesma data de referência:** as três contagens e o valor usam a mesma data local (`America/Sao_Paulo` ou `APP_TIME_ZONE`) lida uma única vez por requisição, e os mesmos limites de `intervaloSituacao` da Fase 3.
+
+**Decisões registradas.** (1) O PDF chama as RNs de "propostas a confirmar" e o `claude.md` de "definidas"; o usuário decidiu adotá-las como definidas. (2) Textos de dias restantes ("vence em 3 dias") ficaram fora do escopo. (3) O PDF deixa em aberto se quantidade 0 é permitida; `claude.md` fixa `≥ 0` — adotado `≥ 0`. (4) Fase 4: o total de produtos conta produtos diferentes (opção recomendada pelo PDF §6.3); o total de unidades, opcional, não foi implementado. (5) Posição dos indicadores: o PDF e o `claude.md` pedem 4 cards no topo e a imagem de referência traz o resumo à direita; adotou-se os dois, com um único componente: cards na **Home** (painel inicial) e painel **Resumo do estoque** à direita na página Produtos.
 
 ## 11. API
 
@@ -143,6 +161,7 @@ Base: `http://localhost:3001/api`. Corpo e respostas em JSON. Erros: `{ "erro": 
 | GET | `/health` | Verifica a API | 200 `{"status":"ok"}` | — |
 | GET | `/produtos?busca=&categoria=&situacao=&pagina=1&limite=20` | Lista ordenada; `busca` filtra nome ou código (parcial); `categoria` filtra por igualdade exata; `situacao` = `vencido`, `proximo` ou `dentro`; `limite` 1–100. Parâmetro vazio = sem filtro. Os filtros combinam-se (E) e valem antes da paginação | 200 `{dados, paginacao:{pagina,limite,total,totalPaginas}}` | 400 parâmetros inválidos (inclui `situacao` fora da lista e parâmetro repetido) |
 | GET | `/categorias` | Categorias distintas realmente cadastradas, em ordem alfabética estável | 200 `{"dados": ["Grãos", "Laticínios"]}` (lista vazia sem produtos) | — |
+| GET | `/indicadores` | Indicadores do dashboard e valor em risco (RN04), do estoque inteiro; sem parâmetros | 200 (exemplo abaixo) | 500 genérico se a soma exceder o limite seguro |
 | GET | `/produtos/:id` | Consulta um produto | 200 | 400 id inválido · 404 |
 | POST | `/produtos` | Cria | 201 produto criado | 400 dados inválidos · 409 código duplicado |
 | PUT | `/produtos/:id` | Atualiza (todos os campos) | 200 | 400 · 404 · 409 |
@@ -155,6 +174,13 @@ Todas as respostas de produto (`GET`, `POST`, `PUT`) incluem **`situacao`** (`ve
 { "id": 3, "nome": "Queijo Minas", "codigo": "QUE1", "categoria": "Laticínios",
   "quantidade": 10, "preco_unitario": 599, "data_validade": "2026-11-17", "situacao": "proximo" }
 ```
+Exemplo de `GET /api/indicadores` (hoje = 2026-10-27, produtos A: 10 × 500 c. e B: 8 × 300 c. a vencer; C vencido; D dentro da validade — resposta obtida em execução real em banco temporário):
+```json
+{ "total_produtos": 4, "produtos_vencidos": 1, "produtos_a_vencer": 2,
+  "valor_em_risco": 7400, "janela_alerta_dias": 7, "data_referencia": "2026-10-27" }
+```
+`valor_em_risco` está em **centavos** (7400 = R$ 74,00). `janela_alerta_dias` e `data_referencia` permitem à interface explicar o cálculo sem repetir a regra.
+
 Erro de filtro: `GET /api/produtos?situacao=atrasado` → 400 `{"erro":"Parâmetros inválidos","detalhes":{"situacao":"situacao deve ser um de: vencido, proximo, dentro"}}`.
 
 Corpo de `POST`/`PUT`:
@@ -170,6 +196,7 @@ curl -X POST localhost:3001/api/produtos -H 'Content-Type: application/json' \
 curl "localhost:3001/api/produtos?busca=leit&limite=5"
 curl "localhost:3001/api/produtos?situacao=proximo&categoria=Latic%C3%ADnios&pagina=1"
 curl localhost:3001/api/categorias
+curl localhost:3001/api/indicadores
 curl -X DELETE localhost:3001/api/produtos/1
 ```
 
@@ -202,7 +229,7 @@ cd backend  && npm start        # API em http://localhost:3001  (npm run dev rec
 cd frontend && npm run dev      # UI em http://localhost:5173
 ```
 ```bash
-cd backend  && npm test         # 88 testes (API, validade, filtros, persistência)
+cd backend  && npm test         # 109 testes (API, validade, filtros, indicadores, persistência)
 cd frontend && npm test         # 5 testes (conversão de moeda e data)
 cd frontend && npm run build    # build de produção em frontend/dist
 ```
@@ -215,18 +242,21 @@ cd frontend && npm run build    # build de produção em frontend/dist
 
 ## 19. Testes e resultados obtidos
 
-Última execução (2026-10-27, Node 20.20.2), na conclusão da Fase 3:
+Última execução (2026-10-27, Node 20.20.2), na conclusão da Fase 4:
 
 | Comando | Resultado |
 |---|---|
-| `cd backend && npm test` | **88 de 88 passaram** (42 da Fase 2 + 46 da Fase 3) |
+| `cd backend && npm test` | **109 de 109 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4) |
 | `cd frontend && npm test` | **5 de 5 passaram** |
 | `cd frontend && npm run build` | ✅ concluído |
 | Ponta a ponta com o banco SQLite real (curl), na Fase 2: criar → editar → reiniciar → consultar → excluir | ✅ dados persistiram após reinício; 400 e 404 em JSON conferidos |
 | Fase 3 com o **relógio real**, banco temporário (curl): produtos com validade ontem, hoje, +7 e +8 dias em São Paulo | ✅ `vencido`, `proximo`, `proximo`, `dentro`; filtros e `/categorias` coerentes |
+| Fase 4 com o relógio real, banco temporário (curl): exemplo do PDF (A 10×R$5,00, B 8×R$3,00, C vencido, D +8 dias) | ✅ `valor_em_risco` = 7400, `produtos_a_vencer` = 2, `produtos_vencidos` = 1, `total_produtos` = 4; após excluir A: 2400, 1, 1, 3. Banco vazio: tudo 0 |
 | `APP_TIME_ZONE=Marte/Olimpo node src/server.js` | ✅ a API não inicia; mensagem clara e código de saída 1 |
 
-**Testes novos da Fase 3** (`backend/test/validade.test.js` e `filtros.test.js`, data de referência fixa em 2026-11-10, nunca o relógio real): limites ontem/hoje/+7/+8 (cenários PDF 5–8) e o exemplo do PDF (hoje = 10/10); virada de mês e de ano; 29/02 bissexto e ano não bissexto; datas inválidas; instante que cruza a meia-noite UTC e ainda é outro dia em São Paulo; fuso padrão, configurado e inválido; `situacao` em POST/GET/PUT/listagem; cada filtro isolado e todas as combinações com busca e paginação; total e metadados; 400 para situação inválida ou repetida; coerência `situacao` × filtro; ordenação estável; `/api/categorias` (vazia, distintas, ordem, reflexo de edição e exclusão). A interface React **não** tem testes automatizados.
+**Testes novos da Fase 3** (`backend/test/validade.test.js` e `filtros.test.js`, data de referência fixa em 2026-11-10, nunca o relógio real): limites ontem/hoje/+7/+8 (cenários PDF 5–8) e o exemplo do PDF (hoje = 10/10); virada de mês e de ano; 29/02 bissexto e ano não bissexto; datas inválidas; instante que cruza a meia-noite UTC e ainda é outro dia em São Paulo; fuso padrão, configurado e inválido; `situacao` em POST/GET/PUT/listagem; cada filtro isolado e todas as combinações com busca e paginação; total e metadados; 400 para situação inválida ou repetida; coerência `situacao` × filtro; ordenação estável; `/api/categorias` (vazia, distintas, ordem, reflexo de edição e exclusão). 
+
+**Testes novos da Fase 4** (`backend/test/indicadores.test.js`, data fixa 2026-11-10): sem produtos (cenário 16); exemplo do PDF = R$ 74,00 (cenário 15); janela inclusiva (ontem e +8 fora; hoje e +7 dentro); vencidos e "dentro" fora do valor; quantidade 0; preço 0; vários produtos conferidos com cálculo independente em BigInt; precisão em centavos (10 + 20 = 30); categorias distintas; editar quantidade, preço e validade; excluir; cadastro inválido ou duplicado não altera nada; API de listagem × indicadores (cenário 14); filtros da listagem não alteram os indicadores; método diferente de GET → 404; soma acima do limite seguro → 500 genérico; produto no limite máximo. A interface React **não** tem testes automatizados.
 
 Testes do backend usam banco `:memory:` ou arquivo temporário, nunca `backend/data`.
 
@@ -242,40 +272,65 @@ Testes do backend usam banco `:memory:` ou arquivo temporário, nunca `backend/d
 | Pesquisa nome/código | `?busca=` | busca isolada e combinada | ✅ testado (API) |
 | RN05, RN06 | validador, `ORDER BY` | sim | ✅ |
 | RNF04 validação front + back | `validators`, `ProdutoForm` | back testado; front não automatizado | ⚠️ parcial |
-| RNF06 consistência indicadores | — | — | ⏳ Fase 4 |
 | RF05 classificar vencidos e próximos; RN01, RN02, RN03 | `validadeService.classificar`, campo `situacao`, `SeloSituacao` | `validade.test.js`, `filtros.test.js` (PDF cenários 5, 6, 7, 8) | ✅ testado (API). Selo na UI: **validação manual pendente** |
 | PDF §6.1 cor + texto | `SeloSituacao` (texto "Vencido", "A vencer", "Dentro da validade" + cor) | — (sem teste de componente) | ⏳ validação manual pendente |
 | RF06 filtrar por situação (PDF cenário 12) | `?situacao=`, seletor "Situação" | situação isolada, combinada, inválida | ✅ API testada · UI: validação manual pendente |
 | RF06 filtrar por categoria (PDF cenário 11) | `?categoria=`, `GET /categorias`, seletor "Categoria" | categoria isolada, combinada, lista de categorias | ✅ API testada · UI: validação manual pendente |
 | Ordenação com filtros (PDF cenário 13; RN06) | `ORDER BY data_validade ASC, id ASC` | desempate por id com filtro | ✅ testado |
 | Data local (decisão D1) | `dataHoje`, `APP_TIME_ZONE` | fronteira UTC × São Paulo, fuso inválido | ✅ testado |
-| RF07, RN04, cenários PDF 14, 15 | — | — | ⏳ Fase 4 |
+| RF07 / RN04 valor em risco (PDF cenário 15) | `indicadoresService.obter`, `GET /indicadores`, card "Valor estimado em risco" | `indicadores.test.js` (fórmula, janela, zeros, precisão, edição, exclusão) | ✅ testado (API) · UI: validação manual pendente |
+| PDF §6.3 / cenário 14: 4 indicadores calculados dos dados reais | `Indicadores.jsx` (Home e painel direito) | consistência API × listagem | ✅ testado (API) · UI: validação manual pendente |
+| RNF06 consistência dos indicadores | agregação SQL sobre `produtos`, recarga após CRUD | edição, exclusão e cadastro inválido | ✅ testado (API) · atualização na tela: validação manual pendente |
+| PDF cenário 16 (vazio) / PDF §13 mensagens | zeros e `R$ 0,00`, estado de erro sem valores | banco vazio | ✅ API · UI pendente |
 | RNF08 responsividade | CSS com `@media` | — | ⚠️ não confirmada individualmente (validação geral da UI feita pelo usuário) |
 | RNF05 segurança básica | sem credenciais; CORS restrito | CORS testado | ✅ |
 
 ## 20. Uso da interface
 
-**Home:** apresentação (indicadores virão na Fase 4). **Produtos:** lista à esquerda com busca (por nome ou código, com atraso de 300 ms), seletores **Situação** (Todas, Vencido, A vencer, Dentro da validade) e **Categoria** (Todas + as categorias reais cadastradas, carregadas da API), botão **Atualizar**, **Novo produto**, **Editar** e **Excluir** (pede confirmação) em cada item; paginação de 10 em 10. Cada produto mostra um selo com a situação (texto + cor). Mudar busca ou filtro volta à página 1; os filtros são enviados ao backend, não aplicados no navegador. À direita, painel de resumo reservado para a Fase 4. Preços aparecem como `R$ X,XX`. Diálogos fecham com Esc.
+**Home:** dashboard com os 4 cards (Total de produtos, Produtos vencidos, A vencer em 7 dias, Valor estimado em risco) e a data de referência; os valores vêm da API e são recarregados ao abrir a página. **Produtos:** lista à esquerda com busca (por nome ou código, com atraso de 300 ms), seletores **Situação** (Todas, Vencido, A vencer, Dentro da validade) e **Categoria** (Todas + as categorias reais cadastradas, carregadas da API), botão **Atualizar**, **Novo produto**, **Editar** e **Excluir** (pede confirmação) em cada item; paginação de 10 em 10. Cada produto mostra um selo com a situação (texto + cor). Mudar busca ou filtro volta à página 1; os filtros são enviados ao backend, não aplicados no navegador. À direita, o painel **Resumo do estoque** mostra os mesmos 4 indicadores, atualizados após cadastrar, editar, excluir ou clicar em **Atualizar** (sempre do estoque inteiro, não dos filtros); se a API falhar, aparece a mensagem de erro e **Tentar novamente**, sem valores inventados. Preços aparecem como `R$ X,XX`. Diálogos fecham com Esc.
 
-### Lista de verificação manual da Fase 3 (a ser executada pelo usuário)
+### Lista de verificação manual da Fase 3 (executada pelo usuário)
 
-**Estado: PENDENTE — nenhuma etapa abaixo foi marcada como concluída.**
+**Estado: validada manualmente pelo usuário — todos os itens passaram (informado pelo usuário; não repetido pelo assistente).**
 
 Use produtos de teste (e apague-os depois) e anote a data de hoje (fuso de São Paulo):
 
-- [ ] Cadastrar um produto com validade **ontem** → selo "Vencido".
-- [ ] Cadastrar um produto com validade **hoje** → selo "A vencer" (hoje não é vencido).
-- [ ] Cadastrar um produto com validade **daqui a 7 dias** → selo "A vencer".
-- [ ] Cadastrar um produto com validade **daqui a 8 dias** → selo "Dentro da validade".
-- [ ] Filtro **Situação** = Vencido / A vencer / Dentro da validade mostra só os produtos correspondentes; "Todas as situações" mostra todos.
-- [ ] Filtro **Categoria**: a lista contém só categorias de produtos cadastrados; escolher uma mostra só os produtos dela; "Todas as categorias" limpa o filtro.
-- [ ] Combinar busca + situação + categoria devolve só os produtos que atendem aos três.
-- [ ] Com mais de 10 resultados filtrados, "Anterior/Próxima" e "Página X de Y" estão corretos.
-- [ ] Estando na página 2 ou mais, alterar busca, situação ou categoria volta à página 1.
-- [ ] Excluir o último produto de uma categoria faz a categoria sumir da lista (e o filtro é limpo se ela estava selecionada).
-- [ ] Parar o backend: aparecem mensagens de erro, sem opções de categoria inventadas.
-- [ ] Legibilidade: o selo é compreensível sem enxergar a cor (o texto basta) e tem contraste adequado; Tab alcança os seletores e a seleção funciona pelo teclado.
-- [ ] Editar o produto de validade ontem para daqui a 8 dias atualiza o selo.
+- [x] Cadastrar um produto com validade **ontem** → selo "Vencido".
+- [x] Cadastrar um produto com validade **hoje** → selo "A vencer" (hoje não é vencido).
+- [x] Cadastrar um produto com validade **daqui a 7 dias** → selo "A vencer".
+- [x] Cadastrar um produto com validade **daqui a 8 dias** → selo "Dentro da validade".
+- [x] Filtro **Situação** = Vencido / A vencer / Dentro da validade mostra só os produtos correspondentes; "Todas as situações" mostra todos.
+- [x] Filtro **Categoria**: a lista contém só categorias de produtos cadastrados; escolher uma mostra só os produtos dela; "Todas as categorias" limpa o filtro.
+- [x] Combinar busca + situação + categoria devolve só os produtos que atendem aos três.
+- [x] Com mais de 10 resultados filtrados, "Anterior/Próxima" e "Página X de Y" estão corretos.
+- [x] Estando na página 2 ou mais, alterar busca, situação ou categoria volta à página 1.
+- [x] Excluir o último produto de uma categoria faz a categoria sumir da lista (e o filtro é limpo se ela estava selecionada).
+- [x] Parar o backend: aparecem mensagens de erro, sem opções de categoria inventadas.
+- [x] Legibilidade: o selo é compreensível sem enxergar a cor (o texto basta) e tem contraste adequado; Tab alcança os seletores e a seleção funciona pelo teclado.
+- [x] Editar o produto de validade ontem para daqui a 8 dias atualiza o selo.
+
+### Lista de verificação manual da Fase 4 (a ser executada pelo usuário)
+
+**Estado: PENDENTE — nenhuma etapa abaixo foi marcada como concluída. O assistente não abriu a interface no navegador.**
+
+Use produtos de teste (e apague-os depois). Para o cálculo independente, anote para cada produto quantidade, preço e validade, e a data de hoje (São Paulo).
+
+- [ ] Sem produtos elegíveis (banco vazio ou só vencidos/dentro da validade): "A vencer" = 0 e "Valor estimado em risco" = R$ 0,00, sem erro.
+- [ ] Cadastrar A: 10 un. a R$ 5,00 com validade daqui a 2 dias e B: 8 un. a R$ 3,00 com validade daqui a 7 dias → "A vencer em 7 dias" = 2 e "Valor estimado em risco" = **R$ 74,00** (50,00 + 24,00).
+- [ ] Cadastrar C vencido (ontem) e D com validade daqui a 8 dias, ambos com valores altos: o valor em risco **não muda**; "Produtos vencidos" sobe em 1 por C; "Total de produtos" soma todos.
+- [ ] Um produto com validade **hoje** conta em "A vencer" e entra no valor.
+- [ ] Um produto a vencer com quantidade 0 (ou preço R$ 0,00) conta em "A vencer" e soma R$ 0,00.
+- [ ] Conferir o resultado com uma conta própria (Σ quantidade × preço dos produtos a vencer) e com a lista filtrada por situação "A vencer".
+- [ ] Editar quantidade e preço de um produto a vencer: o painel do lado direito atualiza o valor após salvar (sem recarregar a página).
+- [ ] Editar a validade de um produto de "A vencer" para "Vencido": contagens e valor se ajustam.
+- [ ] Excluir um produto a vencer: contagens e valor se ajustam.
+- [ ] Valores aparecem como `R$ 1.234,56` (separador de milhar e vírgula decimal).
+- [ ] Usar busca, categoria e situação na lista: os indicadores **não** mudam.
+- [ ] Home: os 4 cards aparecem; o texto explica que é estimativa e não prejuízo; a data de referência é a de hoje.
+- [ ] Parar o backend e clicar em "Tentar novamente"/"Atualizar": aparece erro, sem valores antigos ou inventados.
+- [ ] Tela estreita (≈ 375 px): cards empilham, sem rolagem horizontal e com texto legível.
+- [ ] Os cards são compreensíveis sem cor (cada um tem título e texto); Tab alcança os botões.
+- [ ] Fases anteriores: cadastrar, editar, excluir, busca, filtros, selos e paginação continuam funcionando.
 
 ## 21. Resolução de problemas
 
@@ -292,6 +347,8 @@ Use produtos de teste (e apague-os depois) e anote a data de hoje (fuso de São 
 
 - A interface foi validada manualmente pelo usuário, mas **não por testes automatizados**: os componentes React não têm testes. Responsividade, teclado e diálogos não foram confirmados individualmente.
 - O filtro de categoria é por igualdade exata (diferencia maiúsculas e acentos; "Bebidas" e "bebidas" são categorias distintas).
+- Os indicadores são do estoque inteiro (sem filtro por categoria) e o valor dos vencidos não é apresentado; o total de unidades em estoque não é exibido.
+- A interface de indicadores não tem teste automatizado de componente.
 - A janela de 7 dias é uma constante; não é configurável sem alterar o código.
 - Busca por texto não ignora acentos (`LIKE` do SQLite só ignora maiúsculas ASCII).
 - `data_validade` não tem `CHECK` de formato no banco; a validação é da API.
@@ -299,10 +356,18 @@ Use produtos de teste (e apague-os depois) e anote a data de hoje (fuso de São 
 
 ## 23. Fases seguintes
 
-3. ✅ Classificação de validade (RN01–RN03), selo com texto e cor, filtros por situação e categoria — implementada; validação manual pendente.
-4. Dashboard com 4 indicadores e valor em risco (RN04), painel direito.
+3. ✅ Classificação de validade (RN01–RN03), selo com texto e cor, filtros por situação e categoria — homologada (validação manual informada pelo usuário).
+4. ✅ Dashboard com 4 indicadores e valor em risco (RN04) — implementada e testada automaticamente; validação manual pendente.
 5. Testes de fronteira adicionais, responsividade, consistência dos indicadores.
 6. Opcionais: CSV, PDF, estoque baixo.
+
+### Critérios de aceitação da Fase 4
+- RN04 implementada só no backend, com a fórmula Σ (quantidade × preço) dos produtos na janela hoje…hoje+7, em centavos — ✅ automatizado.
+- Vencidos e produtos dentro da validade fora do valor; quantidade 0 e preço 0 contribuem com 0 — ✅ automatizado.
+- Quatro indicadores calculados dos dados reais e iguais aos da listagem (cenários 14, 15, 16) — ✅ automatizado.
+- Indicadores atualizam após editar e excluir — ✅ automatizado (API); atualização na tela ⏳ validação manual pendente.
+- Valores em `R$ X,XX` e sem recálculo no frontend — ✅ funções de moeda testadas; exibição ⏳ validação manual pendente.
+- Sem esquema novo, sem valor de vencidos separado, sem gráficos, sem total de unidades — ✅.
 
 ### Critérios de aceitação da Fase 3
 - RN01–RN03 implementadas só no backend; cenários 5, 6, 7 e 8 do PDF cobertos por testes — ✅ automatizado.

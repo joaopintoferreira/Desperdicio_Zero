@@ -171,3 +171,19 @@ body {
 .filtro label { font-size: 0.8rem; font-weight: 600; color: var(--cor-texto-suave); }
 .filtro select { padding: 8px 10px; border: 1px solid var(--cor-borda); border-radius: 8px; background: var(--cor-card); font: inherit; color: var(--cor-texto); }
 select:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+
+/* ---- Fase 4: indicadores ---- */
+.conteudo__cheio { grid-column: 1 / -1; }
+
+.indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 0; }
+.indicador {
+  margin: 0; padding: 14px 16px; background: var(--cor-fundo); border-radius: 10px;
+  border-left: 6px solid var(--cor-borda); min-width: 0;
+}
+.indicador dt { font-size: 0.85rem; font-weight: 600; color: var(--cor-texto-suave); }
+.indicador dd { margin: 4px 0; font-size: 1.7rem; font-weight: 700; overflow-wrap: anywhere; }
+.indicador__nota { margin: 0; font-size: 0.78rem; color: var(--cor-texto-suave); }
+.indicador--vencido { border-left-color: var(--cor-vencido); }
+.indicador--proximo { border-left-color: var(--cor-proximo); }
+.indicador--valor { border-left-color: var(--cor-texto); }
+.indicadores__data { margin: 10px 0 0; font-size: 0.78rem; color: var(--cor-texto-suave); }

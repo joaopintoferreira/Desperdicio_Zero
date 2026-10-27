@@ -38,6 +38,9 @@ export function listarProdutos({ busca = '', categoria = '', situacao = '', pagi
   return requisitar(`/produtos?${params}`)
 }
 
+// Indicadores do dashboard e valor em risco: calculados pelo backend (RN04).
+export const obterIndicadores = () => requisitar('/indicadores')
+
 // Categorias distintas realmente cadastradas.
 export const listarCategorias = () => requisitar('/categorias')
 

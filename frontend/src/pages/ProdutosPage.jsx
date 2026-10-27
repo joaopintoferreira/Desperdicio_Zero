@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { atualizarProduto, criarProduto, excluirProduto, listarCategorias, listarProdutos } from '../services/api'
 import { ROTULOS_SITUACAO } from '../components/SeloSituacao'
+import Indicadores from '../components/Indicadores'
 import ProdutoCard from '../components/ProdutoCard'
 import ProdutoForm from '../components/ProdutoForm'
 import ConfirmarExclusao from '../components/ConfirmarExclusao'
@@ -16,6 +17,7 @@ export default function ProdutosPage() {
   const [categorias, setCategorias] = useState([])
   const [erroCategorias, setErroCategorias] = useState('')
   const [pagina, setPagina] = useState(1)
+  const [versaoIndicadores, setVersaoIndicadores] = useState(0) // muda a cada alteração, para recarregar os indicadores
   const [resultado, setResultado] = useState(null) // { dados, paginacao }
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -82,6 +84,7 @@ export default function ProdutosPage() {
       setMensagem('Produto cadastrado com sucesso.')
     }
     setFormulario(null)
+    setVersaoIndicadores((v) => v + 1)
     await Promise.all([carregar(), carregarCategorias()])
   }
 
@@ -89,6 +92,7 @@ export default function ProdutosPage() {
     await excluirProduto(excluindo.id)
     setExcluindo(null)
     setMensagem('Produto excluído com sucesso.')
+    setVersaoIndicadores((v) => v + 1)
     // Se a página ficou vazia após excluir o último item, volta uma página.
     if (resultado.dados.length === 1 && pagina > 1) setPagina(pagina - 1)
     else await carregar()
@@ -118,7 +122,14 @@ export default function ProdutosPage() {
             value={entrada}
             onChange={(e) => setEntrada(e.target.value)}
           />
-          <button type="button" className="btn" onClick={carregar} disabled={carregando}>Atualizar</button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => { carregar(); setVersaoIndicadores((v) => v + 1) }}
+            disabled={carregando}
+          >
+            Atualizar
+          </button>
         </div>
 
         <div className="filtros">
@@ -180,10 +191,10 @@ export default function ProdutosPage() {
         )}
       </section>
 
-      {/* Resumo e indicadores reais: Fase 4. */}
+      {/* Resumo do estoque: os mesmos indicadores da Home, sempre do estoque inteiro (não dos filtros). */}
       <aside className="painel" aria-labelledby="titulo-resumo">
         <h2 id="titulo-resumo">Resumo do estoque</h2>
-        <p className="vazio">Os indicadores serão exibidos nas próximas fases.</p>
+        <Indicadores versao={versaoIndicadores} />
       </aside>
 
       {formulario && (

@@ -3,6 +3,9 @@ const cors = require('cors');
 const healthRoutes = require('./routes/health');
 const { criarProdutosRouter } = require('./routes/produtos');
 const { criarCategoriasRouter } = require('./routes/categorias');
+const { criarIndicadoresRouter } = require('./routes/indicadores');
+const { criarIndicadoresController } = require('./controllers/indicadoresController');
+const { criarIndicadoresService } = require('./services/indicadoresService');
 const { criarProdutoController } = require('./controllers/produtoController');
 const { criarProdutoService } = require('./services/produtoService');
 const { criarProdutoModel } = require('./models/produtoModel');
@@ -36,6 +39,8 @@ function criarApp(db, opcoes = {}) {
   const controller = criarProdutoController(service);
   app.use('/api/produtos', criarProdutosRouter(controller));
   app.use('/api/categorias', criarCategoriasRouter(controller));
+  const indicadores = criarIndicadoresController(criarIndicadoresService(model, { hoje }));
+  app.use('/api/indicadores', criarIndicadoresRouter(indicadores));
 
   app.use((req, res) => {
     res.status(404).json({ erro: 'Rota não encontrada' });

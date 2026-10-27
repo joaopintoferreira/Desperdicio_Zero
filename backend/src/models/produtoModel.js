@@ -58,6 +58,21 @@ function criarProdutoModel(db) {
         .map((linha) => linha.categoria);
     },
 
+    // Agregado dos produtos que atendem ao filtro: quantos são e o somatório de quantidade × preço
+    // (em centavos). A soma sai como BigInt para não perder precisão antes de o serviço validar.
+    agregar(filtros) {
+      const { where, params } = montarFiltro(filtros);
+      const linha = db
+        .prepare(
+          `SELECT COUNT(*) AS produtos,
+                  COALESCE(SUM(quantidade * preco_unitario), 0) AS valor_centavos
+           FROM produtos ${where}`,
+        )
+        .safeIntegers(true)
+        .get(params);
+      return { produtos: Number(linha.produtos), valorCentavos: linha.valor_centavos };
+    },
+
     buscarPorId(id) {
       return db.prepare(`SELECT ${COLUNAS} FROM produtos WHERE id = ?`).get(id);
     },

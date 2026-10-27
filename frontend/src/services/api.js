@@ -29,11 +29,17 @@ async function requisitar(caminho, opcoes = {}) {
 
 export const verificarSaude = () => requisitar('/health')
 
-export function listarProdutos({ busca = '', pagina = 1, limite = 10 } = {}) {
+// Os filtros (busca, categoria, situacao) são aplicados pelo backend antes da paginação.
+export function listarProdutos({ busca = '', categoria = '', situacao = '', pagina = 1, limite = 10 } = {}) {
   const params = new URLSearchParams({ pagina, limite })
   if (busca) params.set('busca', busca)
+  if (categoria) params.set('categoria', categoria)
+  if (situacao) params.set('situacao', situacao)
   return requisitar(`/produtos?${params}`)
 }
+
+// Categorias distintas realmente cadastradas.
+export const listarCategorias = () => requisitar('/categorias')
 
 export const criarProduto = (dados) =>
   requisitar('/produtos', { method: 'POST', body: JSON.stringify(dados) })

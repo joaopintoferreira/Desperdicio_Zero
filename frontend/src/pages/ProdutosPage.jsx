@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
-import { atualizarProduto, criarProduto, excluirProduto, listarProdutos } from '../services/api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { atualizarProduto, criarProduto, excluirProduto, listarCategorias, listarProdutos } from '../services/api'
+import { ROTULOS_SITUACAO } from '../components/SeloSituacao'
 import ProdutoCard from '../components/ProdutoCard'
 import ProdutoForm from '../components/ProdutoForm'
 import ConfirmarExclusao from '../components/ConfirmarExclusao'
@@ -10,6 +11,10 @@ const POR_PAGINA = 10
 export default function ProdutosPage() {
   const [entrada, setEntrada] = useState('')
   const [busca, setBusca] = useState('')
+  const [situacao, setSituacao] = useState('')
+  const [categoria, setCategoria] = useState('')
+  const [categorias, setCategorias] = useState([])
+  const [erroCategorias, setErroCategorias] = useState('')
   const [pagina, setPagina] = useState(1)
   const [resultado, setResultado] = useState(null) // { dados, paginacao }
   const [carregando, setCarregando] = useState(true)
@@ -31,16 +36,42 @@ export default function ProdutosPage() {
     setCarregando(true)
     setErro('')
     try {
-      setResultado(await listarProdutos({ busca, pagina, limite: POR_PAGINA }))
+      setResultado(await listarProdutos({ busca, categoria, situacao, pagina, limite: POR_PAGINA }))
     } catch (err) {
       setResultado(null)
       setErro(err.message)
     } finally {
       setCarregando(false)
     }
-  }, [busca, pagina])
+  }, [busca, categoria, situacao, pagina])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // Categorias vêm da API (nunca de uma lista fixa). Recarrega após salvar/excluir,
+  // pois categorias podem surgir ou desaparecer; se a escolhida sumiu, limpa o filtro.
+  const categoriaAtual = useRef(categoria)
+  categoriaAtual.current = categoria
+
+  const carregarCategorias = useCallback(async () => {
+    try {
+      const { dados } = await listarCategorias()
+      setCategorias(dados)
+      setErroCategorias('')
+      if (categoriaAtual.current && !dados.includes(categoriaAtual.current)) {
+        setCategoria('')
+        setPagina(1)
+      }
+    } catch (err) {
+      setCategorias([])
+      setErroCategorias(`Não foi possível carregar as categorias. ${err.message}`)
+    }
+  }, [])
+
+  useEffect(() => { carregarCategorias() }, [carregarCategorias])
+
+  const alterarSituacao = (valor) => { setSituacao(valor); setPagina(1) }
+  const alterarCategoria = (valor) => { setCategoria(valor); setPagina(1) }
+  const filtrando = Boolean(busca || categoria || situacao)
 
   async function salvar(dados) {
     if (formulario.produto) {
@@ -51,7 +82,7 @@ export default function ProdutosPage() {
       setMensagem('Produto cadastrado com sucesso.')
     }
     setFormulario(null)
-    await carregar()
+    await Promise.all([carregar(), carregarCategorias()])
   }
 
   async function confirmarExclusao() {
@@ -61,6 +92,7 @@ export default function ProdutosPage() {
     // Se a página ficou vazia após excluir o último item, volta uma página.
     if (resultado.dados.length === 1 && pagina > 1) setPagina(pagina - 1)
     else await carregar()
+    await carregarCategorias()
   }
 
   const dados = resultado?.dados ?? []
@@ -89,6 +121,31 @@ export default function ProdutosPage() {
           <button type="button" className="btn" onClick={carregar} disabled={carregando}>Atualizar</button>
         </div>
 
+        <div className="filtros">
+          <div className="filtro">
+            <label htmlFor="filtro-situacao">Situação</label>
+            <select id="filtro-situacao" value={situacao} onChange={(e) => alterarSituacao(e.target.value)}>
+              <option value="">Todas as situações</option>
+              {Object.entries(ROTULOS_SITUACAO).map(([valor, rotulo]) => (
+                <option key={valor} value={valor}>{rotulo}</option>
+              ))}
+            </select>
+          </div>
+          <div className="filtro">
+            <label htmlFor="filtro-categoria">Categoria</label>
+            <select
+              id="filtro-categoria"
+              value={categoria}
+              onChange={(e) => alterarCategoria(e.target.value)}
+              aria-describedby={erroCategorias ? 'erro-categorias' : undefined}
+            >
+              <option value="">Todas as categorias</option>
+              {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        {erroCategorias && <p id="erro-categorias" role="alert" className="msg msg--erro">{erroCategorias}</p>}
+
         <div aria-live="polite">
           {mensagem && <p className="msg msg--ok">{mensagem}</p>}
         </div>
@@ -97,7 +154,7 @@ export default function ProdutosPage() {
 
         {!erro && resultado && dados.length === 0 && (
           <p className="vazio">
-            {busca ? 'Nenhum produto encontrado para a pesquisa.' : 'Nenhum produto cadastrado.'}
+            {filtrando ? 'Nenhum produto encontrado para a pesquisa e os filtros aplicados.' : 'Nenhum produto cadastrado.'}
           </p>
         )}
 

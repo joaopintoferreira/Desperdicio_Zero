@@ -1,12 +1,14 @@
 import { centavosParaReais } from '../utils/moeda'
 import { formatarData } from '../utils/data'
+import SeloSituacao from './SeloSituacao'
 
-// Card de produto com dados e ações. A situação de validade (cores) entra na Fase 3.
+// Card de produto com dados, situação de validade (calculada pelo backend) e ações.
 export default function ProdutoCard({ produto, onEditar, onExcluir }) {
   return (
     <li className="produto">
       <div className="produto__info">
         <strong>{produto.nome}</strong>
+        <SeloSituacao situacao={produto.situacao} />
         <span className="produto__meta">
           Código {produto.codigo} · {produto.categoria}
         </span>

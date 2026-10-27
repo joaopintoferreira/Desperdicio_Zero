@@ -1,0 +1,47 @@
+# Dependências
+node_modules/
+
+# Artefatos de build e cobertura
+dist/
+dist-ssr/
+build/
+coverage/
+.nyc_output/
+
+# Bancos SQLite locais (a estrutura é criada por backend/src/db/schema.sql ao iniciar a API)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Variáveis de ambiente e credenciais
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs, caches e temporários
+*.log
+npm-debug.log*
+.npm/
+.cache/
+.vite/
+*.tmp
+*.swp
+*.local
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Dados privados de ferramentas de desenvolvimento
+.claude/

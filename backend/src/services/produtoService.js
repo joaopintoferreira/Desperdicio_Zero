@@ -1,6 +1,7 @@
 // Regras do CRUD de produtos: valida, traduz erros do banco e aplica paginação.
 const { ErroApp } = require('../erros');
 const { validarProduto } = require('../validators/produto');
+const { SITUACOES, classificar, intervaloSituacao } = require('./validadeService');
 
 const LIMITE_PADRAO = 20;
 const LIMITE_MAXIMO = 100;
@@ -37,14 +38,49 @@ function traduzirErroBanco(err) {
   return err;
 }
 
-function criarProdutoService(model) {
+// Lê um parâmetro de query que deve ser texto simples (rejeita repetido, ex.: ?categoria=a&categoria=b).
+function textoOpcional(valor, campo) {
+  if (valor === undefined) return '';
+  if (typeof valor !== 'string') {
+    throw new ErroApp(400, 'Parâmetros inválidos', { [campo]: `${campo} deve ser informado uma única vez` });
+  }
+  return valor.trim();
+}
+
+function lerSituacao(valor) {
+  const situacao = textoOpcional(valor, 'situacao');
+  if (situacao === '') return undefined; // vazio = sem filtro
+  if (!SITUACOES.includes(situacao)) {
+    throw new ErroApp(400, 'Parâmetros inválidos', {
+      situacao: `situacao deve ser um de: ${SITUACOES.join(', ')}`,
+    });
+  }
+  return situacao;
+}
+
+// `hoje` é uma função que devolve a data atual 'YYYY-MM-DD' (injetável nos testes).
+function criarProdutoService(model, { hoje }) {
+  const comSituacao = (produto, dataRef) => ({ ...produto, situacao: classificar(produto.data_validade, dataRef) });
+
   return {
-    listar({ busca, pagina, limite }) {
+    listar({ busca, categoria, situacao, pagina, limite }) {
       const termo = typeof busca === 'string' ? busca.trim() : '';
+      const categoriaTxt = textoOpcional(categoria, 'categoria'); // vazio = sem filtro
+      const situacaoSel = lerSituacao(situacao);
       const paginaN = inteiroPositivo(pagina, 'pagina', 1);
       const limiteN = inteiroPositivo(limite, 'limite', LIMITE_PADRAO, LIMITE_MAXIMO);
-      const total = model.contar(termo);
-      const dados = model.listar({ busca: termo, limite: limiteN, deslocamento: (paginaN - 1) * limiteN });
+
+      // "hoje" é lido uma vez: o filtro e o campo `situacao` usam a mesma data de referência.
+      const dataRef = hoje();
+      const filtros = {
+        busca: termo,
+        categoria: categoriaTxt,
+        intervalo: situacaoSel ? intervaloSituacao(situacaoSel, dataRef) : undefined,
+      };
+      const total = model.contar(filtros);
+      const dados = model
+        .listar(filtros, { limite: limiteN, deslocamento: (paginaN - 1) * limiteN })
+        .map((p) => comSituacao(p, dataRef));
       return {
         dados,
         paginacao: { pagina: paginaN, limite: limiteN, total, totalPaginas: Math.ceil(total / limiteN) },
@@ -54,13 +90,17 @@ function criarProdutoService(model) {
     obter(idTexto) {
       const produto = model.buscarPorId(parseId(idTexto));
       if (!produto) throw new ErroApp(404, 'Produto não encontrado');
-      return produto;
+      return comSituacao(produto, hoje());
+    },
+
+    listarCategorias() {
+      return { dados: model.listarCategorias() };
     },
 
     criar(corpo) {
       const valores = exigirValido(corpo);
       try {
-        return model.buscarPorId(model.inserir(valores));
+        return comSituacao(model.buscarPorId(model.inserir(valores)), hoje());
       } catch (err) {
         throw traduzirErroBanco(err);
       }
@@ -74,7 +114,7 @@ function criarProdutoService(model) {
       } catch (err) {
         throw traduzirErroBanco(err);
       }
-      return model.buscarPorId(id);
+      return comSituacao(model.buscarPorId(id), hoje());
     },
 
     remover(idTexto) {

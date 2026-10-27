@@ -2,10 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const healthRoutes = require('./routes/health');
 const { criarProdutosRouter } = require('./routes/produtos');
+const { criarCategoriasRouter } = require('./routes/categorias');
 const { criarProdutoController } = require('./controllers/produtoController');
 const { criarProdutoService } = require('./services/produtoService');
 const { criarProdutoModel } = require('./models/produtoModel');
 const { ErroApp } = require('./erros');
+const { fusoConfigurado, validarFuso, dataHoje } = require('./services/validadeService');
 
 // Origens autorizadas (CORS): variável CORS_ORIGINS, separadas por vírgula.
 // Padrão: apenas o frontend local de desenvolvimento.
@@ -15,8 +17,13 @@ function origensPermitidas() {
 }
 
 // Fábrica do app: recebe a conexão SQLite, o que permite testar sem abrir porta
-// nem tocar no banco real.
-function criarApp(db) {
+// nem tocar no banco real. Opções (úteis em testes):
+//   hoje: () => 'YYYY-MM-DD'  data de referência da regra de validade
+//   fuso: identificador IANA   (padrão: APP_TIME_ZONE ou America/Sao_Paulo)
+// Fuso inválido lança erro aqui, na inicialização.
+function criarApp(db, opcoes = {}) {
+  const fuso = opcoes.fuso !== undefined ? validarFuso(opcoes.fuso) : fusoConfigurado();
+  const hoje = opcoes.hoje ?? (() => dataHoje(fuso));
   const app = express();
 
   app.use(cors({ origin: origensPermitidas() }));
@@ -25,8 +32,10 @@ function criarApp(db) {
   app.use('/api/health', healthRoutes);
 
   const model = criarProdutoModel(db);
-  const service = criarProdutoService(model);
-  app.use('/api/produtos', criarProdutosRouter(criarProdutoController(service)));
+  const service = criarProdutoService(model, { hoje });
+  const controller = criarProdutoController(service);
+  app.use('/api/produtos', criarProdutosRouter(controller));
+  app.use('/api/categorias', criarCategoriasRouter(controller));
 
   app.use((req, res) => {
     res.status(404).json({ erro: 'Rota não encontrada' });

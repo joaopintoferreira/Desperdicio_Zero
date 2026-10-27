@@ -50,7 +50,8 @@ describe('criação (RF01)', () => {
     const r = await api.req('POST', '/api/produtos', produtoValido());
     assert.equal(r.status, 201);
     assert.equal(r.corpo.id, 1);
-    assert.deepEqual({ ...r.corpo, id: undefined }, { ...produtoValido(), id: undefined });
+    // 2026-11-15 está a 5 dias de HOJE_FIXO (2026-11-10): "proximo"
+    assert.deepEqual({ ...r.corpo, id: undefined }, { ...produtoValido(), id: undefined, situacao: 'proximo' });
     assert.equal(api.contar(), 1);
   });
 

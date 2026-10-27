@@ -2,6 +2,7 @@
 function criarProdutoController(service) {
   return {
     listar: (req, res) => res.json(service.listar(req.query)),
+    categorias: (req, res) => res.json(service.listarCategorias()),
     obter: (req, res) => res.json(service.obter(req.params.id)),
     criar: (req, res) => res.status(201).json(service.criar(req.body)),
     atualizar: (req, res) => res.json(service.atualizar(req.params.id, req.body)),

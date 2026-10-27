@@ -9,19 +9,53 @@ function padraoLike(texto) {
   return `%${texto.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
-function criarProdutoModel(db) {
-  const where = (busca) => (busca ? "WHERE nome LIKE @p ESCAPE '\\' OR codigo LIKE @p ESCAPE '\\'" : '');
-  const params = (busca) => (busca ? { p: padraoLike(busca) } : {});
+// Monta WHERE e parâmetros a partir dos filtros. Usado por listar e contar,
+// garantindo que o total sempre corresponda à lista filtrada.
+// filtros: { busca?, categoria?, intervalo?: { min, max } } (limites inclusivos, null = aberto)
+function montarFiltro({ busca, categoria, intervalo } = {}) {
+  const condicoes = [];
+  const params = {};
+  if (busca) {
+    condicoes.push("(nome LIKE @busca ESCAPE '\\' OR codigo LIKE @busca ESCAPE '\\')");
+    params.busca = padraoLike(busca);
+  }
+  if (categoria) {
+    condicoes.push('categoria = @categoria');
+    params.categoria = categoria;
+  }
+  if (intervalo) {
+    if (intervalo.min !== null) {
+      condicoes.push('data_validade >= @dataMin');
+      params.dataMin = intervalo.min;
+    }
+    if (intervalo.max !== null) {
+      condicoes.push('data_validade <= @dataMax');
+      params.dataMax = intervalo.max;
+    }
+  }
+  return { where: condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '', params };
+}
 
+function criarProdutoModel(db) {
   return {
-    listar({ busca, limite, deslocamento }) {
+    listar(filtros, { limite, deslocamento }) {
+      const { where, params } = montarFiltro(filtros);
       return db
-        .prepare(`SELECT ${COLUNAS} FROM produtos ${where(busca)} ${ORDEM} LIMIT @limite OFFSET @deslocamento`)
-        .all({ ...params(busca), limite, deslocamento });
+        .prepare(`SELECT ${COLUNAS} FROM produtos ${where} ${ORDEM} LIMIT @limite OFFSET @deslocamento`)
+        .all({ ...params, limite, deslocamento });
     },
 
-    contar(busca) {
-      return db.prepare(`SELECT COUNT(*) AS total FROM produtos ${where(busca)}`).get(params(busca)).total;
+    contar(filtros) {
+      const { where, params } = montarFiltro(filtros);
+      return db.prepare(`SELECT COUNT(*) AS total FROM produtos ${where}`).get(params).total;
+    },
+
+    // Categorias distintas realmente cadastradas, em ordem estável.
+    listarCategorias() {
+      return db
+        .prepare('SELECT DISTINCT categoria FROM produtos ORDER BY categoria COLLATE NOCASE ASC, categoria ASC')
+        .all()
+        .map((linha) => linha.categoria);
     },
 
     buscarPorId(id) {

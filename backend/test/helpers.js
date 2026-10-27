@@ -2,10 +2,13 @@
 const { criarConexao } = require('../src/db/connection');
 const { criarApp } = require('../src/app');
 
-async function iniciarApi() {
+// Data de referência fixa nos testes: nenhum teste depende do relógio real.
+const HOJE_FIXO = '2026-11-10';
+
+async function iniciarApi(opcoes = {}) {
   const db = criarConexao(':memory:');
   const servidor = await new Promise((resolve) => {
-    const s = criarApp(db).listen(0, '127.0.0.1', () => resolve(s));
+    const s = criarApp(db, { hoje: () => HOJE_FIXO, ...opcoes }).listen(0, '127.0.0.1', () => resolve(s));
   });
   const base = `http://127.0.0.1:${servidor.address().port}`;
 
@@ -38,4 +41,4 @@ const produtoValido = (extra = {}) => ({
   ...extra,
 });
 
-module.exports = { iniciarApi, produtoValido };
+module.exports = { iniciarApi, produtoValido, HOJE_FIXO };

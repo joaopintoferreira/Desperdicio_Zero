@@ -2,7 +2,7 @@
 
 Aplicação web Full Stack para **controle de estoque e de validade de produtos**, voltada a pequenos mercados, mercearias e minimercados. Projeto acadêmico.
 
-> **Estado atual: Fases 1 a 4 homologadas manualmente pelo usuário (informado). Fase 5 (testes de fronteira, consistência e refinamento) implementada e verificada por testes automatizados — a validação manual da Fase 5 está PENDENTE do usuário.** A Fase 6 (extras opcionais) não foi iniciada.
+> **Estado atual: Fases 1 a 5 homologadas manualmente pelo usuário (informado). Fase 6 (extras opcionais: CSV, relatório em PDF por impressão e alerta de estoque baixo) e as melhorias de menu responsivo, gráficos e tela de relatórios estão implementadas e verificadas por testes automatizados — a validação manual da Fase 6 está PENDENTE do usuário.** A Fase 7 não existe nos documentos e não foi iniciada.
 
 ## Homologação da Fase 2
 
@@ -42,7 +42,7 @@ Pequenos mercados, mercearias, minimercados e estabelecimentos com produtos de p
 | ✅ Implementado e testado automaticamente (Fase 3); validação manual pendente | RF05 classificar vencido / a vencer / dentro da validade (`situacao`) · RF06 filtrar por situação e por categoria, combinados com busca e paginação · selo com cor **e** texto |
 | ✅ Implementado e testado automaticamente (Fase 4); validação manual pendente | Dashboard com 4 indicadores (total de produtos, vencidos, a vencer em 7 dias, valor estimado em risco) · RF07 valor em risco (RN04) |
 | ✅ Implementado e testado automaticamente (Fase 5); validação manual pendente | Testes de fronteira (datas, valores negativos, campos vazios), conferência dos indicadores contra a base, 5 defeitos corrigidos (3 de validação/entrada, 2 de interface), refinamentos de interface (ver [Fase 5](#fase-5--testes-e-refinamento)) |
-| 💡 Opcional (Fase 6) | Exportação CSV, relatório PDF, alerta de estoque baixo |
+| ✅ Implementado e testado automaticamente (Fase 6); validação manual pendente | Exportação CSV da lista de produtos a vencer · relatório em PDF (impressão do navegador, "Salvar como PDF") · alerta de estoque baixo com limite mínimo por produto · menu hambúrguer em telas pequenas · gráficos na Home · tela de Relatórios (ver [Fase 6](#fase-6--extras-menu-responsivo-gráficos-e-relatórios)) |
 
 ## 6. Tecnologias e justificativa
 
@@ -80,17 +80,18 @@ desperdicio-zero/
 │   │   ├── server.js              # abre o banco e escuta a porta
 │   │   ├── erros.js               # ErroApp (status HTTP + detalhes)
 │   │   ├── db/                    # connection.js (abre SQLite) e schema.sql
-│   │   ├── routes/                # health.js, produtos.js, categorias.js, indicadores.js
+│   │   ├── routes/                # health.js, produtos.js, categorias.js, indicadores.js, relatorios.js
 │   │   ├── controllers/           # camada HTTP
-│   │   ├── services/              # produtoService (CRUD, filtros, paginação), validadeService (RN01–RN03, data local), indicadoresService (RN04 e indicadores)
+│   │   ├── services/              # produtoService (CRUD, filtros, paginação), validadeService (RN01–RN03, data local), indicadoresService (RN04, indicadores e detalhe por categoria), estoqueService (estoque baixo), relatorioService e csvService (CSV)
 │   │   ├── validators/produto.js  # validação de produto e de data real
 │   │   └── models/                # acesso ao SQLite
 │   ├── test/                      # testes node:test
 │   └── data/                      # produtos.db (ignorado pelo git)
 ├── frontend/
 │   ├── src/
-│   │   ├── components/            # Sidebar, Header, Indicadores, SeloSituacao, ProdutoCard, ProdutoForm, Modal, ConfirmarExclusao, Icones
-│   │   ├── pages/                 # HomePage, ProdutosPage
+│   │   ├── components/            # Sidebar (menu/gaveta), Header (hambúrguer), Indicadores, graficos/ (RoscaSituacao, BarrasValorCategoria, GraficosIndicadores), TabelaCategorias, AlertaEstoqueBaixo, SeloSituacao, ProdutoCard, ProdutoForm, Modal, ConfirmarExclusao, Icones
+│   │   ├── hooks/                 # useIndicadores, useMediaQuery
+│   │   ├── pages/                 # HomePage, ProdutosPage, RelatoriosPage
 │   │   ├── services/api.js        # comunicação com a API
 │   │   └── utils/                 # moeda.js (reais↔centavos), data.js (apresentação)
 │   └── index.html
@@ -108,8 +109,11 @@ desperdicio-zero/
 | quantidade | INTEGER | NOT NULL, CHECK (quantidade >= 0) |
 | preco_unitario | INTEGER | NOT NULL, CHECK (>= 0) — **centavos** |
 | data_validade | TEXT | NOT NULL — `YYYY-MM-DD` |
+| estoque_minimo | INTEGER | NOT NULL DEFAULT 0, CHECK (>= 0) — limite do alerta de estoque baixo; 0 = sem alerta (**Fase 6**) |
 
 Índice `idx_produtos_data_validade` em `data_validade`. O formato da data **não** tem `CHECK` no banco: é validado pela API.
+
+**Migração aditiva da Fase 6.** Bancos criados antes da Fase 6 não têm `estoque_minimo`. Ao iniciar o backend (`criarConexao`), se a coluna não existir o sistema: (1) grava uma cópia consistente do banco em `<pasta do banco>/backups/<nome>-AAAAMMDD-HHMMSS-antes-estoque-minimo.db` (`VACUUM INTO`); (2) executa `ALTER TABLE produtos ADD COLUMN estoque_minimo INTEGER NOT NULL DEFAULT 0 CHECK (estoque_minimo >= 0)`. Nenhum produto é alterado ou apagado (todos ficam com limite 0, sem alerta). É idempotente: com a coluna já presente, nada é feito e nenhum backup novo é criado. Bancos novos já nascem com a coluna. A pasta `backups/` fica fora do Git (`*.db`).
 
 ## 10. Regras de negócio
 
@@ -159,9 +163,10 @@ Base: `http://localhost:3001/api`. Corpo e respostas em JSON. Erros: `{ "erro": 
 | Método | Rota | Descrição | Sucesso | Erros |
 |---|---|---|---|---|
 | GET | `/health` | Verifica a API | 200 `{"status":"ok"}` | — |
-| GET | `/produtos?busca=&categoria=&situacao=&pagina=1&limite=20` | Lista ordenada; `busca` filtra nome ou código (parcial); `categoria` filtra por igualdade exata; `situacao` = `vencido`, `proximo` ou `dentro`; `limite` 1–100. Parâmetro vazio = sem filtro. Os filtros combinam-se (E) e valem antes da paginação | 200 `{dados, paginacao:{pagina,limite,total,totalPaginas}}` | 400 parâmetros inválidos (inclui `situacao` fora da lista e parâmetro repetido) |
+| GET | `/produtos?busca=&categoria=&situacao=&pagina=1&limite=20` | Lista ordenada; `busca` filtra nome ou código (parcial); `categoria` filtra por igualdade exata; `situacao` = `vencido`, `proximo` ou `dentro`; `estoque=baixo` lista só produtos com estoque baixo; `limite` 1–100. Parâmetro vazio = sem filtro. Os filtros combinam-se (E) e valem antes da paginação | 200 `{dados, paginacao:{pagina,limite,total,totalPaginas}}` | 400 parâmetros inválidos (inclui `situacao` fora da lista e parâmetro repetido) |
 | GET | `/categorias` | Categorias distintas realmente cadastradas, em ordem alfabética estável | 200 `{"dados": ["Grãos", "Laticínios"]}` (lista vazia sem produtos) | — |
-| GET | `/indicadores` | Indicadores do dashboard e valor em risco (RN04), do estoque inteiro; sem parâmetros | 200 (exemplo abaixo) | 500 genérico se a soma exceder o limite seguro |
+| GET | `/relatorios/produtos-a-vencer.csv` | CSV dos produtos a vencer (hoje…hoje+7), por validade e id (Fase 6) | 200 `text/csv; charset=utf-8`, anexo | — |
+| GET | `/indicadores` | Indicadores do dashboard e valor em risco (RN04), do estoque inteiro; inclui `produtos_dentro`, `produtos_estoque_baixo` e `por_categoria`; sem parâmetros | 200 (exemplo abaixo) | 500 genérico se a soma exceder o limite seguro |
 | GET | `/produtos/:id` | Consulta um produto | 200 | 400 id inválido · 404 |
 | POST | `/produtos` | Cria | 201 produto criado | 400 dados inválidos · 409 código duplicado |
 | PUT | `/produtos/:id` | Atualiza (todos os campos) | 200 | 400 · 404 · 409 |
@@ -169,7 +174,7 @@ Base: `http://localhost:3001/api`. Corpo e respostas em JSON. Erros: `{ "erro": 
 
 Qualquer rota inexistente: **404** JSON. JSON malformado: **400** JSON. Corpo > 100 kb: 413. Falha interna: 500 genérico (sem detalhes internos).
 
-Todas as respostas de produto (`GET`, `POST`, `PUT`) incluem **`situacao`** (`vencido`, `proximo` ou `dentro`), calculada pelo backend e **não aceita na entrada**. Exemplo, com hoje = 2026-11-10:
+Todas as respostas de produto (`GET`, `POST`, `PUT`) incluem **`estoque_minimo`** e **`estoque_baixo`** (calculado pelo backend, não aceito na entrada) e **`situacao`** (`vencido`, `proximo` ou `dentro`), calculada pelo backend e **não aceita na entrada**. Exemplo, com hoje = 2026-11-10:
 ```json
 { "id": 3, "nome": "Queijo Minas", "codigo": "QUE1", "categoria": "Laticínios",
   "quantidade": 10, "preco_unitario": 599, "data_validade": "2026-11-17", "situacao": "proximo" }
@@ -182,6 +187,27 @@ Exemplo de `GET /api/indicadores` (hoje = 2026-10-27, produtos A: 10 × 500 c. e
 `valor_em_risco` está em **centavos** (7400 = R$ 74,00). `janela_alerta_dias` e `data_referencia` permitem à interface explicar o cálculo sem repetir a regra.
 
 Erro de filtro: `GET /api/produtos?situacao=atrasado` → 400 `{"erro":"Parâmetros inválidos","detalhes":{"situacao":"situacao deve ser um de: vencido, proximo, dentro"}}`.
+
+**`estoque_minimo` na entrada (Fase 6):** opcional, inteiro ≥ 0 (até 1.000.000). Ausente no `POST` = 0 (sem alerta); ausente no `PUT` **preserva** o limite já configurado. `null`, decimais, texto e negativos devolvem 400.
+
+**Exemplo de `GET /api/indicadores` com a Fase 6** (4 produtos: Leite 10 × R$ 5,00 e Queijo 8 × R$ 3,00 a vencer; Arroz vencido; Feijão dentro; Leite com `estoque_minimo` 15 — resposta obtida em execução real, banco em memória, data de referência fixa):
+```json
+{ "total_produtos": 4, "produtos_vencidos": 1, "produtos_a_vencer": 2, "produtos_dentro": 1,
+  "valor_em_risco": 7400, "produtos_estoque_baixo": 1,
+  "por_categoria": [
+    { "categoria": "Laticínios", "total_produtos": 2, "produtos_vencidos": 0, "produtos_a_vencer": 2, "produtos_dentro": 0, "valor_em_risco": 7400 },
+    { "categoria": "Grãos", "total_produtos": 2, "produtos_vencidos": 1, "produtos_a_vencer": 0, "produtos_dentro": 1, "valor_em_risco": 0 } ],
+  "janela_alerta_dias": 7, "data_referencia": "2026-11-10" }
+```
+`por_categoria` vem do mesmo cálculo e das mesmas definições do total (a soma das categorias é igual ao total geral); ordem: maior valor em risco primeiro, empate por nome. Os campos antigos mantêm a mesma definição.
+
+**`GET /api/relatorios/produtos-a-vencer.csv`** (mesmos dados; separador `;`, UTF-8 com BOM, quebras CRLF, valores em reais com vírgula, datas `YYYY-MM-DD`; células de texto que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo para não virarem fórmulas no Excel):
+```
+Código;Nome;Categoria;Quantidade;Preço unitário (R$);Data de validade;Valor estimado (R$)
+LEI001;Leite Integral 1L;Laticínios;10;5,00;2026-11-12;50,00
+QUE001;Queijo Minas;Laticínios;8;3,00;2026-11-17;24,00
+```
+A soma da última coluna é o valor em risco (R$ 74,00). Sem produtos a vencer, o arquivo traz só o cabeçalho.
 
 Corpo de `POST`/`PUT`:
 ```json
@@ -202,7 +228,7 @@ curl -X DELETE localhost:3001/api/produtos/1
 
 ## 12–14. Pré-requisitos, instalação e configuração
 
-- Node.js 20 (testado com v20.20.2) e npm 10 (testado com 10.8.2).
+- Node.js 20.6 ou superior (testado com v20.20.2; o teste do frontend usa `node --import`) e npm 10 (testado com 10.8.2).
 - Instalação (cada pasta separadamente):
 
 ```bash
@@ -229,8 +255,8 @@ cd backend  && npm start        # API em http://localhost:3001  (npm run dev rec
 cd frontend && npm run dev      # UI em http://localhost:5173
 ```
 ```bash
-cd backend  && npm test         # 109 testes (API, validade, filtros, indicadores, persistência)
-cd frontend && npm test         # 5 testes (conversão de moeda e data)
+cd backend  && npm test         # 192 testes (API, validade, filtros, indicadores, fronteiras, fluxos, relatórios, estoque, migração)
+cd frontend && npm test         # 37 testes (moeda/data, menu, gráficos, consultas assíncronas, componentes renderizados)
 cd frontend && npm run build    # build de produção em frontend/dist
 ```
 
@@ -242,17 +268,18 @@ cd frontend && npm run build    # build de produção em frontend/dist
 
 ## 19. Testes e resultados obtidos
 
-Última execução (2026-10-27, Node 20.20.2), na conclusão da Fase 5:
+Última execução (2026-10-27, Node 20.20.2), na conclusão da Fase 6:
 
 | Comando | Resultado |
 |---|---|
-| `cd backend && npm test` | **162 de 162 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4 + 53 da Fase 5) |
-| `cd frontend && npm test` | **10 de 10 passaram** (5 anteriores + 5 da Fase 5) |
+| `cd backend && npm test` | **192 de 192 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4 + 53 da Fase 5 + 30 da Fase 6) |
+| `cd frontend && npm test` | **37 de 37 passaram** (10 anteriores + 27 da Fase 6) |
 | `cd frontend && npm run build` | ✅ concluído |
 | Ponta a ponta com o banco SQLite real (curl), na Fase 2: criar → editar → reiniciar → consultar → excluir | ✅ dados persistiram após reinício; 400 e 404 em JSON conferidos |
 | Fase 3 com o **relógio real**, banco temporário (curl): produtos com validade ontem, hoje, +7 e +8 dias em São Paulo | ✅ `vencido`, `proximo`, `proximo`, `dentro`; filtros e `/categorias` coerentes |
 | Fase 4 com o relógio real, banco temporário (curl): exemplo do PDF (A 10×R$5,00, B 8×R$3,00, C vencido, D +8 dias) | ✅ `valor_em_risco` = 7400, `produtos_a_vencer` = 2, `produtos_vencidos` = 1, `total_produtos` = 4; após excluir A: 2400, 1, 1, 3. Banco vazio: tudo 0 |
 | Fase 5: indicadores e `situacao` conferidos contra um **oráculo independente** sobre uma **cópia** do banco de desenvolvimento (3 produtos reais) | ✅ API = oráculo (total 3, vencidos 1, a vencer 1, valor em risco R$ 149,75); o arquivo original não foi alterado (hash idêntico antes e depois) |
+| Fase 6: **migração sobre uma cópia do banco de desenvolvimento** (3 produtos reais) iniciando o `server.js` | ✅ coluna criada, dados idênticos (`diff` vazio), `estoque_minimo` = 0 nos três, backup gravado sem a coluna nova, API e CSV respondendo; o arquivo original ficou com o mesmo hash e sem pasta `backups/` |
 | `APP_TIME_ZONE=Marte/Olimpo node src/server.js` | ✅ a API não inicia; mensagem clara e código de saída 1 |
 
 **Testes novos da Fase 3** (`backend/test/validade.test.js` e `filtros.test.js`, data de referência fixa em 2026-11-10, nunca o relógio real): limites ontem/hoje/+7/+8 (cenários PDF 5–8) e o exemplo do PDF (hoje = 10/10); virada de mês e de ano; 29/02 bissexto e ano não bissexto; datas inválidas; instante que cruza a meia-noite UTC e ainda é outro dia em São Paulo; fuso padrão, configurado e inválido; `situacao` em POST/GET/PUT/listagem; cada filtro isolado e todas as combinações com busca e paginação; total e metadados; 400 para situação inválida ou repetida; coerência `situacao` × filtro; ordenação estável; `/api/categorias` (vazia, distintas, ordem, reflexo de edição e exclusão). 
@@ -296,13 +323,21 @@ Testes do backend usam banco `:memory:` ou arquivo temporário, nunca `backend/d
 | Fase 5 — indicadores correspondem à base (PDF §11, RNF06) | `indicadoresService`, `validadeService` | `consistencia.test.js` (oráculo independente) + cópia da base real | ✅ testado/verificado |
 | Fase 5 — responsividade e mensagens (claude.md §7, RNF08) | `index.css`, `ProdutosPage`, `Indicadores` | — (sem teste de interface) | ⏳ validação manual pendente |
 | Fase 5 — documentação e apresentação (PDF §16, claude.md §10) | este README (seções 1–24, Fase 5) | — | ✅ escrito · conferência pelo usuário pendente |
+| Fase 6 — PDF §6.5: exportar produtos a vencer em CSV | `relatorioService`, `csvService`, `GET /relatorios/produtos-a-vencer.csv`, botão em Relatórios | `relatorios.test.js` (janela, ordem, valores, BOM, fórmulas, vazio) | ✅ testado (API) · download no navegador: validação manual pendente |
+| Fase 6 — PDF §6.5: relatório em PDF | `RelatoriosPage` + CSS `@media print` (Imprimir / Salvar como PDF) | — (depende do navegador) | ⏳ validação manual pendente |
+| Fase 6 — PDF §6.5: alerta de estoque baixo por limite mínimo | coluna `estoque_minimo`, `estoqueService`, `?estoque=baixo`, selo, aviso | `estoque.test.js` (regra, validação, PUT, filtro, SQL × JS) | ✅ testado (API e renderização) · UI: validação manual pendente |
+| Fase 6 — migração aditiva com backup (decisão do usuário) | `db/connection.js` (`migrarEstoqueMinimo`) | `estoque.test.js` (dados preservados, backup, idempotência) + cópia do banco real | ✅ testado/verificado |
+| Autorizado — menu hambúrguer | `Sidebar`, `Header`, `App`, `utils/menu.js`, CSS ≤ 800 px | `menu.test.js`, `componentes.test.js` (aria, gaveta) | ✅ lógica e marcação testadas · comportamento real: validação manual pendente |
+| Autorizado — gráficos na Home | `graficos/` (rosca e barras), `useIndicadores`, `utils/graficos.js` | `graficos.test.js`, `componentes.test.js`, `relatorios.test.js` (por categoria × oráculo) | ✅ dados e renderização testados · desenho real: validação manual pendente |
+| Autorizado — tela de Relatórios | `RelatoriosPage`, `TabelaCategorias` | `componentes.test.js`, consistência por categoria | ✅ testado · UI: validação manual pendente |
+| Respostas assíncronas antigas não substituem as novas | `utils/consulta.js`, `useIndicadores`, `ProdutosPage` | `consulta.test.js` | ✅ lógica testada |
 | PDF cenário 16 (vazio) / PDF §13 mensagens | zeros e `R$ 0,00`, estado de erro sem valores | banco vazio | ✅ API · UI pendente |
 | RNF08 responsividade | CSS com `@media` | — | ⚠️ não confirmada individualmente (validação geral da UI feita pelo usuário) |
 | RNF05 segurança básica | sem credenciais; CORS restrito | CORS testado | ✅ |
 
 ## 20. Uso da interface
 
-**Home:** dashboard com os 4 cards (Total de produtos, Produtos vencidos, A vencer em 7 dias, Valor estimado em risco) e a data de referência; os valores vêm da API e são recarregados ao abrir a página. **Produtos:** lista à esquerda com busca (por nome ou código, com atraso de 300 ms), seletores **Situação** (Todas, Vencido, A vencer, Dentro da validade) e **Categoria** (Todas + as categorias reais cadastradas, carregadas da API), botão **Atualizar**, **Novo produto**, **Editar** e **Excluir** (pede confirmação) em cada item; paginação de 10 em 10. Cada produto mostra um selo com a situação (texto + cor). Mudar busca ou filtro volta à página 1; os filtros são enviados ao backend, não aplicados no navegador. À direita, o painel **Resumo do estoque** mostra os mesmos 4 indicadores, atualizados após cadastrar, editar, excluir ou clicar em **Atualizar** (sempre do estoque inteiro, não dos filtros); se a API falhar, aparece a mensagem de erro e **Tentar novamente**, sem valores inventados. Preços aparecem como `R$ X,XX`. Diálogos fecham com Esc.
+**Menu:** Home, Produtos e Relatórios. Em telas pequenas (≤ 800 px) o menu vira uma gaveta aberta pelo botão hambúrguer no cabeçalho. **Home:** dashboard com os 4 cards (Total de produtos, Produtos vencidos, A vencer em 7 dias, Valor estimado em risco) e a data de referência, seguidos de dois gráficos (rosca por situação e barras do valor em risco por categoria) e do aviso de estoque baixo; os valores vêm da API e são recarregados ao abrir a página. **Relatórios:** relatório do estado atual do estoque, com tabela por categoria, exportação CSV e impressão/PDF. **Produtos:** lista à esquerda com busca (por nome ou código, com atraso de 300 ms), seletores **Situação** (Todas, Vencido, A vencer, Dentro da validade) e **Categoria** (Todas + as categorias reais cadastradas, carregadas da API), botão **Atualizar**, **Novo produto**, **Editar** e **Excluir** (pede confirmação) em cada item; paginação de 10 em 10. Cada produto mostra um selo com a situação (texto + cor). Mudar busca ou filtro volta à página 1; os filtros são enviados ao backend, não aplicados no navegador. À direita, o painel **Resumo do estoque** mostra os mesmos 4 indicadores, atualizados após cadastrar, editar, excluir ou clicar em **Atualizar** (sempre do estoque inteiro, não dos filtros); se a API falhar, aparece a mensagem de erro e **Tentar novamente**, sem valores inventados. Preços aparecem como `R$ X,XX`. Diálogos fecham com Esc.
 
 ### Lista de verificação manual da Fase 3 (executada pelo usuário)
 
@@ -347,24 +382,24 @@ Use produtos de teste (e apague-os depois). Para o cálculo independente, anote 
 - [x] Os cards são compreensíveis sem cor (cada um tem título e texto); Tab alcança os botões.
 - [x] Fases anteriores: cadastrar, editar, excluir, busca, filtros, selos e paginação continuam funcionando.
 
-### Lista de verificação manual da Fase 5 (a ser executada pelo usuário)
+### Lista de verificação manual da Fase 5 (executada pelo usuário)
 
-**Estado: PENDENTE — nenhuma etapa abaixo foi marcada como concluída. O assistente não abriu a interface no navegador.**
+**Estado: validada manualmente pelo usuário — todos os itens aprovados (informado pelo usuário; o assistente não abriu a interface no navegador).**
 
 Use produtos de teste e apague-os depois.
 
-- [ ] **Busca rápida:** digitar e apagar texto rapidamente na busca; a lista final corresponde ao texto que ficou no campo (sem resultado "antigo" aparecendo depois).
-- [ ] **Nome longo:** cadastrar um produto com nome de 120 letras sem espaços (ex.: `AAAA…`) e categoria longa; o card, o diálogo de exclusão e as mensagens quebram a linha e **não** geram rolagem horizontal, inclusive em tela estreita (≈ 375 px).
-- [ ] **Diálogo em tela baixa:** deixar a janela com pouca altura (ou celular deitado) e abrir "Novo produto": o diálogo rola e o botão **Salvar** continua alcançável.
-- [ ] **Valores negativos:** no formulário, quantidade `-1` e preço `-5` mostram mensagem em português e nada é gravado.
-- [ ] **Campos vazios:** salvar com tudo vazio mostra a mensagem "Campo obrigatório" em cada campo; nome só com espaços também é recusado.
-- [ ] **Datas:** data de validade vazia é recusada; testar 29/02 de ano bissexto (ex.: 29/02/2028, aceito) e de ano não bissexto (o seletor de data do navegador não deve permitir; se permitir, a API recusa com mensagem).
-- [ ] **Preço digitado:** `5,99`, `5.99` e `1.234,56` são aceitos e aparecem como `R$ 5,99` e `R$ 1.234,56`; `5 99`, `abc` e `1.000` são recusados com mensagem.
-- [ ] **Limites:** quantidade `1000001` é recusada pelo servidor com mensagem ("excede o limite permitido").
-- [ ] **Indicadores × lista:** com vários produtos, conferir que "A vencer", "Vencidos" e "Total" são iguais aos totais da lista filtrada por situação (ver "Página X de Y") e que o valor em risco confere com a conta feita à mão.
-- [ ] **Falha de comunicação:** com o backend parado, a lista e os indicadores mostram mensagem de erro (sem números antigos) e voltam ao normal ao religar e clicar em Atualizar/Tentar novamente.
-- [ ] **Mensagens de sucesso:** cadastrar, editar e excluir mostram a mensagem de sucesso correspondente; lista vazia mostra "Nenhum produto cadastrado" (ou a mensagem de filtros, se houver filtro ativo).
-- [ ] **Regressão:** CRUD, busca, filtros, selos, paginação, indicadores e o formato `R$ X,XX` continuam funcionando.
+- [x] **Busca rápida:** digitar e apagar texto rapidamente na busca; a lista final corresponde ao texto que ficou no campo (sem resultado "antigo" aparecendo depois).
+- [x] **Nome longo:** cadastrar um produto com nome de 120 letras sem espaços (ex.: `AAAA…`) e categoria longa; o card, o diálogo de exclusão e as mensagens quebram a linha e **não** geram rolagem horizontal, inclusive em tela estreita (≈ 375 px).
+- [x] **Diálogo em tela baixa:** deixar a janela com pouca altura (ou celular deitado) e abrir "Novo produto": o diálogo rola e o botão **Salvar** continua alcançável.
+- [x] **Valores negativos:** no formulário, quantidade `-1` e preço `-5` mostram mensagem em português e nada é gravado.
+- [x] **Campos vazios:** salvar com tudo vazio mostra a mensagem "Campo obrigatório" em cada campo; nome só com espaços também é recusado.
+- [x] **Datas:** data de validade vazia é recusada; testar 29/02 de ano bissexto (ex.: 29/02/2028, aceito) e de ano não bissexto (o seletor de data do navegador não deve permitir; se permitir, a API recusa com mensagem).
+- [x] **Preço digitado:** `5,99`, `5.99` e `1.234,56` são aceitos e aparecem como `R$ 5,99` e `R$ 1.234,56`; `5 99`, `abc` e `1.000` são recusados com mensagem.
+- [x] **Limites:** quantidade `1000001` é recusada pelo servidor com mensagem ("excede o limite permitido").
+- [x] **Indicadores × lista:** com vários produtos, conferir que "A vencer", "Vencidos" e "Total" são iguais aos totais da lista filtrada por situação (ver "Página X de Y") e que o valor em risco confere com a conta feita à mão.
+- [x] **Falha de comunicação:** com o backend parado, a lista e os indicadores mostram mensagem de erro (sem números antigos) e voltam ao normal ao religar e clicar em Atualizar/Tentar novamente.
+- [x] **Mensagens de sucesso:** cadastrar, editar e excluir mostram a mensagem de sucesso correspondente; lista vazia mostra "Nenhum produto cadastrado" (ou a mensagem de filtros, se houver filtro ativo).
+- [x] **Regressão:** CRUD, busca, filtros, selos, paginação, indicadores e o formato `R$ X,XX` continuam funcionando.
 
 ## Fase 5 — Testes e refinamento
 
@@ -390,7 +425,7 @@ Os itens 4 e 5 foram identificados por **leitura do código**, não por teste au
 - Indicadores e `situacao` iguais a um cálculo independente sobre conjuntos grandes e sobre uma cópia da base real — ✅ automatizado / verificado.
 - Fluxo principal completo e processo real do servidor (inclusive reinício e fuso) — ✅ automatizado.
 - Nenhum 500 para entradas inválidas do usuário nos parâmetros testados — ✅ automatizado.
-- Responsividade e mensagens na interface — ⏳ validação manual pendente.
+- Responsividade e mensagens na interface — ✅ validação manual informada pelo usuário.
 - Documentação acadêmica completa (PDF §16) — ✅ neste README; conferência pelo usuário pendente.
 
 ### Requisitos não funcionais — situação
@@ -403,8 +438,8 @@ Os itens 4 e 5 foram identificados por **leitura do código**, não por teste au
 | RNF04 | Validação no frontend e no backend | Backend: testado automaticamente; frontend: conveniência (vazios, negativos, tipos), sem teste de componente |
 | RNF05 | Segurança básica | Sem credenciais no repositório; CORS restrito e configurável; SQL parametrizado; erros 5xx sem detalhes internos — testado |
 | RNF06 | Indicadores iguais aos registros reais | Testado contra oráculo independente e contra cópia da base real |
-| RNF07 | Testabilidade: testes das regras e operações críticas | 162 testes de backend e 10 de frontend (utilitários) |
-| RNF08 | Responsividade | CSS responsivo (`@media`); validação manual pendente para a Fase 5 |
+| RNF07 | Testabilidade: testes das regras e operações críticas | 192 testes de backend e 37 de frontend (utilitários e componentes renderizados) |
+| RNF08 | Responsividade | CSS responsivo (`@media`); menu hambúrguer na Fase 6; Fase 5 validada pelo usuário, Fase 6 pendente |
 
 ### Diagrama de fluxo (requisição → regra → resposta)
 
@@ -429,16 +464,116 @@ flowchart TD
 ### Resultados alcançados
 - Aplicação Full Stack funcional (React + Express + SQLite) com CRUD, pesquisa, paginação, classificação de validade (RN01–RN03), filtros por situação e categoria, dashboard com 4 indicadores e valor em risco (RN04).
 - Regras de negócio centralizadas no backend; valores monetários em centavos inteiros do banco à exibição.
-- 162 testes automatizados de backend e 10 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
-- Homologação manual pelo usuário das Fases 1 a 4 (informada); Fase 5 pendente.
+- 192 testes automatizados de backend e 37 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
+- Homologação manual pelo usuário das Fases 1 a 5 (informada); Fase 6 pendente.
+- Extras da Fase 6 (CSV, relatório em PDF, estoque baixo), menu hambúrguer, gráficos e tela de Relatórios implementados e testados automaticamente.
 - Fases 1 a 5 sem funcionalidade fora do escopo documental (sem login, vendas, notificações, IA ou app móvel).
 
 ### Melhorias futuras (não implementadas)
-- Fase 6 (opcionais): exportação CSV, relatório PDF e alerta de estoque baixo.
+- ~~Fase 6 (opcionais): exportação CSV, relatório PDF e alerta de estoque baixo~~ — implementada (ver Fase 6).
 - Valor financeiro dos vencidos em indicador separado e total de unidades em estoque (opcionais citados no PDF).
 - Janela de alerta configurável; busca sem diferenciar acentos; categoria como entidade própria.
 - Testes automatizados de componentes React e testes de interface em navegador.
 - Autenticação, histórico de movimentações e integração com leitor de código de barras ficariam fora do escopo atual e exigiriam decisão da equipe.
+- Gráficos de evolução no tempo só seriam possíveis com histórico real (hoje o sistema guarda apenas o estado atual do estoque).
+
+## Fase 6 — Extras, menu responsivo, gráficos e relatórios
+
+**Escopo documental original da Fase 6** (PDF §6.5 e §11; `claude.md` §3 e §7) — *opcional, "se o tempo permitir"*:
+1. Exportação da lista de produtos a vencer para **CSV**.
+2. Exportação de relatórios em **PDF**.
+3. **Alerta de estoque baixo** com base num limite mínimo definido para cada produto.
+
+Os documentos não definem formato do CSV, do PDF nem a regra exata do estoque baixo; as decisões tomadas estão abaixo. Além do escopo documental, o usuário autorizou expressamente três melhorias: **menu hambúrguer**, **gráficos na Home** e **tela de Relatórios**.
+
+### Decisões
+
+| Tema | Decisão | Origem |
+|---|---|---|
+| Estoque baixo exige um campo novo (`estoque_minimo`) | Migração **aditiva com backup** (seção 9); testada em cópia do banco real | Escolhida pelo usuário |
+| Relatório em PDF | **Imprimir / Salvar como PDF** (impressão do navegador com estilo próprio); sem biblioteca nova | Escolhida pelo usuário |
+| Regra do estoque baixo | `estoque_minimo > 0` **e** `quantidade ≤ estoque_minimo`; limite 0 = sem alerta | **Decisão do assistente** — os documentos não a definem; mudança em um só ponto (`services/estoqueService.js` e a condição equivalente em SQL) |
+| Formato do CSV | `;`, UTF-8 com BOM, CRLF, vírgula decimal, só produtos a vencer (hoje…hoje+7) | Decisão do assistente (abre direto no Excel pt-BR) |
+| Biblioteca de gráficos | **Nenhuma**: gráficos em SVG/CSS próprios | Decisão do assistente (abaixo) |
+| Tipos de gráfico | Rosca (proporção por situação) e barras horizontais (valor em risco por categoria) | Decisão do assistente (abaixo) |
+
+**Por que não há biblioteca de gráficos.** Nenhuma estava instalada; os dados são poucos (3 situações e algumas categorias) e os dois gráficos são simples. Uma biblioteca (ex.: Recharts) aumentaria o bundle e as dependências, e esta instalação já teve problemas com o npm. O SVG/CSS próprio é pequeno, acessível (cada gráfico tem rótulo em texto, legenda e resumo para leitor de tela) e fácil de testar. Única dependência de desenvolvimento adicionada: `esbuild` (já usado pelo Vite) para testar os componentes com `node:test`.
+
+### Menu responsivo (hambúrguer)
+- **Telas grandes (> 800 px):** barra lateral fixa, igual à homologada.
+- **Telas pequenas (≤ 800 px):** a barra vira uma **gaveta** aberta pelo botão hambúrguer do cabeçalho (botão real, `aria-label`, `aria-expanded`, `aria-controls="menu-lateral"`). Fecha pelo botão **Fechar menu**, ao escolher uma opção, ao clicar no fundo escurecido e com **Esc**; o foco vai para "Fechar menu" ao abrir e volta ao hambúrguer ao fechar. Com a gaveta aberta, o conteúdo de fundo fica inerte (`inert`) e a gaveta fechada sai da ordem de foco (`visibility: hidden`). Largura da gaveta: `min(280px, 85vw)`, sem rolagem horizontal. Respeita `prefers-reduced-motion`.
+- Se a janela voltar a ser larga com a gaveta aberta, ela fecha sozinha.
+
+### Gráficos (Home e Relatórios) — o que cada um representa
+Ficam logo abaixo dos 4 cards na Home e também na tela de Relatórios, e usam **os mesmos dados dos cards** (uma única chamada a `GET /api/indicadores`).
+
+| Gráfico | Dados | Observações |
+|---|---|---|
+| **Rosca — Situação dos produtos** | `produtos_vencidos`, `produtos_a_vencer`, `produtos_dentro` | Mostra a proporção; a legenda traz contagem e percentual (1 casa decimal). Os percentuais arredondados podem não somar exatamente 100,0%. Centro: total de produtos |
+| **Barras — Valor estimado em risco por categoria** | `por_categoria[].valor_em_risco` (RN04 agrupado) | Em R$ pt-BR; sem produtos a vencer mostra "Nenhum valor em risco (R$ 0,00)" em vez de barras vazias; traz a nota "estimativa, não prejuízo" |
+
+A comparação de **quantidades** por situação está nos cards e na legenda da rosca (com contagem). Não há gráfico temporal, tendência ou previsão, porque o sistema não guarda histórico. Estoque vazio, carregamento e erro de API têm mensagem própria (sem números inventados).
+
+### Tela de Relatórios
+Nova opção do menu (**Relatórios**): retrato do estoque no momento da consulta, com a **data de referência** da classificação, as definições de vencido / a vencer / dentro da validade, a explicação de que o valor em risco é estimativa, os 4 cards, o aviso de estoque baixo, os gráficos, a tabela **por categoria** (total, vencidos, a vencer, dentro, valor em risco) e dois botões: **Exportar produtos a vencer (CSV)** e **Imprimir / Salvar como PDF** (a impressão oculta menu, cabeçalho e botões e mostra um título próprio).
+
+### Alerta de estoque baixo
+Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoque baixo** no card e "(mínimo N)" na linha de estoque; filtro **Estoque → Estoque baixo** na lista (combina com os demais filtros); aviso com a quantidade na Home e no Relatório (`produtos_estoque_baixo`). O estoque baixo **não** é um quinto card nem altera os indicadores existentes.
+
+### Critérios de aceitação da Fase 6
+- CSV só com produtos a vencer, ordenado, com valores corretos e seguro contra fórmulas — ✅ automatizado.
+- Migração aditiva preserva todos os dados e cria backup — ✅ automatizado (banco temporário) e verificado em cópia do banco real.
+- Estoque baixo: regra, validação, filtro e consistência SQL × JavaScript — ✅ automatizado.
+- Indicadores por categoria iguais ao total e a um oráculo independente; indicadores antigos inalterados — ✅ automatizado.
+- Estados dos gráficos (carregando, erro, vazio, dados), rótulos acessíveis, menu com `aria-*` — ✅ renderização testada.
+- Respostas assíncronas antigas não sobrescrevem as novas — ✅ lógica testada (`consulta.js`, usada em `useIndicadores`); a lista de produtos usa a mesma técnica desde a Fase 5.
+- Abertura e fechamento reais do menu, foco, layout em celular/tablet, gráficos desenhados, impressão e download do CSV — ⏳ **validação manual pendente**.
+
+### Lista de verificação manual da Fase 6 (a ser executada pelo usuário)
+
+**Estado: PENDENTE — nenhuma etapa abaixo foi marcada como concluída. O assistente não abriu a interface no navegador.**
+
+*Primeira execução:* reinicie o backend. Se o terminal mostrar `Migração: backup do banco gravado em …/backups/…`, a migração foi aplicada e o backup existe.
+
+**A. Migração e dados**
+- [ ] Após reiniciar, os mesmos produtos de antes aparecem, com os mesmos dados e indicadores; existe um arquivo em `backend/data/backups/`.
+- [ ] Reiniciar de novo **não** cria outro backup.
+
+**B. Menu hambúrguer** (use o modo de dispositivo do navegador ou redimensione a janela)
+- [ ] **Desktop (> 800 px):** barra lateral escura como antes; sem botão hambúrguer.
+- [ ] **Tablet (~768 px) e celular (~375 px):** barra lateral some; aparece o botão hambúrguer no cabeçalho, ao lado do título.
+- [ ] Tocar no hambúrguer abre o menu à esquerda, legível (itens Home, Produtos, Relatórios com espaço entre si), com fundo escurecido, sem rolagem horizontal.
+- [ ] Fecha pelo botão **Fechar menu**, ao clicar no fundo escuro, com **Esc** e ao escolher uma opção (a tela muda e o menu não fica aberto).
+- [ ] Teclado: Tab chega ao hambúrguer; Enter abre; o foco vai para "Fechar menu"; com o menu aberto o Tab não chega ao conteúdo de trás; ao fechar o foco volta ao hambúrguer; o foco é visível.
+- [ ] Abrir o menu e alargar a janela para desktop: o menu fecha sozinho e a barra fixa aparece normalmente.
+- [ ] Todas as telas continuam acessíveis pelo menu e ocupam a largura toda no celular.
+
+**C. Gráficos na Home**
+- [ ] Logo abaixo dos 4 cards aparecem a rosca "Situação dos produtos" e as barras "Valor estimado em risco por categoria".
+- [ ] Conferir com a lista (filtre por situação): contagens e percentuais da rosca batem com os cards e com os totais da lista; os valores das barras somam o card "Valor estimado em risco".
+- [ ] Os gráficos são compreensíveis sem cor (legenda e rótulos em texto); em celular a rosca e a legenda quebram linha e as barras cabem na tela.
+- [ ] Cadastrar, editar (quantidade, preço, validade ou categoria) e excluir produtos e voltar à Home: gráficos e cards se atualizam juntos.
+- [ ] Filtros e busca da página Produtos **não** alteram os gráficos.
+- [ ] **Estoque vazio** (use um banco de teste: `DB_PATH=/tmp/vazio.db npm start`): a Home mostra a mensagem "Nenhum produto cadastrado" no lugar dos gráficos e zeros nos cards.
+- [ ] Sem produtos a vencer: as barras mostram "Nenhum valor em risco (R$ 0,00)".
+- [ ] **Erro:** com o backend parado, cards e gráficos mostram mensagem de erro e "Tentar novamente", sem números; ao religar e clicar, voltam.
+
+**D. Relatórios**
+- [ ] A opção Relatórios aparece no menu e abre a tela; título "Relatórios de indicadores".
+- [ ] A tela mostra a data de referência (hoje), as definições, a nota de que o valor é estimativa, os cards, os gráficos e a tabela por categoria.
+- [ ] Os números dos cards, dos gráficos da Home, dos gráficos do Relatório e da tabela são **iguais** (some as colunas da tabela e compare com os cards).
+- [ ] **Exportar produtos a vencer (CSV)** baixa `produtos-a-vencer-AAAA-MM-DD.csv`; abrir no Excel/LibreOffice: acentos corretos, colunas separadas, só os produtos a vencer, valores em reais e soma da última coluna igual ao valor em risco.
+- [ ] **Imprimir / Salvar como PDF** abre a impressão; na pré-visualização não aparecem menu, cabeçalho nem botões, e os gráficos aparecem com cores; salvar como PDF funciona.
+- [ ] Layout da tela em celular: tabela rola na horizontal dentro da própria caixa (sem rolar a página), gráficos legíveis.
+
+**E. Estoque baixo**
+- [ ] No formulário, "Estoque mínimo (alerta)" aceita 0 e inteiros; recusa `-1` e `1,5` com mensagem.
+- [ ] Produto com quantidade ≤ mínimo (> 0) mostra o selo **Estoque baixo** e "(mínimo N)"; com quantidade maior ou mínimo 0, não mostra.
+- [ ] Editar a quantidade liga e desliga o selo; o filtro **Estoque → Estoque baixo** lista só esses produtos e combina com busca, categoria e situação.
+- [ ] O aviso "N produtos estão com estoque baixo" aparece na Home e no Relatório e some quando não há nenhum.
+
+**F. Regressão**
+- [ ] CRUD, busca, filtros, selos de validade, paginação, valores `R$ X,XX` e os 4 cards continuam funcionando; o layout desktop continua igual ao homologado.
 
 ## 21. Resolução de problemas
 
@@ -449,11 +584,17 @@ flowchart TD
 | Tela mostra "Não foi possível comunicar com o servidor" | Backend desligado ou porta diferente: inicie com `npm start` e confira `VITE_API_URL`. |
 | Erro de CORS no navegador | A origem do frontend não está em `CORS_ORIGINS`. |
 | `EADDRINUSE` | Porta 3001 ocupada; defina `PORT`. |
+| Terminal mostra `Migração: backup do banco gravado em …` | Normal na primeira execução após a Fase 6: o banco ganhou a coluna `estoque_minimo` (veja a seção 9). Os backups ficam em `backend/data/backups/` |
+| O CSV abre com acentos errados ou tudo numa coluna só | Abra pelo Excel/LibreOffice como UTF-8 com separador `;` (o arquivo já traz BOM UTF-8) |
+| "Salvar como PDF" sai com a barra lateral ou sem cores | Na janela de impressão ative "Gráficos de segundo plano" / "Background graphics" |
 | `better-sqlite3` não compila/instala | Use Node 20 e `npm install` novamente (baixa binário pré-compilado). |
 
 ## 22. Limitações conhecidas
 
 - A interface foi validada manualmente pelo usuário, mas **não por testes automatizados**: os componentes React não têm testes. Responsividade, teclado e diálogos não foram confirmados individualmente.
+- **Fase 6:** a regra do estoque baixo (`quantidade ≤ mínimo`, mínimo 0 = sem alerta) é decisão do assistente, não dos documentos. O "PDF" é a impressão do navegador (não há geração de arquivo PDF no servidor). O CSV exporta só os produtos a vencer.
+- Os gráficos são do estado atual do estoque: não mostram evolução no tempo (não há histórico). Com muitas categorias, o gráfico de barras fica longo (a tabela do Relatório lista todas).
+- As interações do menu (abrir, fechar, foco), o desenho real dos gráficos, a impressão e o download do CSV não têm teste automatizado em navegador; são verificados pelo checklist manual.
 - `pagina`/`limite` são estritos (apenas dígitos; `pagina` ≤ 1.000.000).
 - A busca por palavra de um campo é feita com `LIKE`; códigos diferenciam maiúsculas de minúsculas ("abc" e "ABC" são códigos distintos).
 - O filtro de categoria é por igualdade exata (diferencia maiúsculas e acentos; "Bebidas" e "bebidas" são categorias distintas).
@@ -468,8 +609,8 @@ flowchart TD
 
 3. ✅ Classificação de validade (RN01–RN03), selo com texto e cor, filtros por situação e categoria — homologada (validação manual informada pelo usuário).
 4. ✅ Dashboard com 4 indicadores e valor em risco (RN04) — homologada (validação manual informada pelo usuário).
-5. ✅ Testes de fronteira, consistência dos indicadores, refinamentos de interface — implementada e testada automaticamente; validação manual pendente.
-6. Opcionais: CSV, PDF, estoque baixo.
+5. ✅ Testes de fronteira, consistência dos indicadores, refinamentos de interface — homologada (validação manual informada pelo usuário).
+6. ✅ Extras opcionais (CSV, relatório em PDF por impressão, estoque baixo) mais menu hambúrguer, gráficos e tela de Relatórios — implementada e testada automaticamente; validação manual pendente. (Não há Fase 7 nos documentos.)
 
 ### Critérios de aceitação da Fase 4
 - RN04 implementada só no backend, com a fórmula Σ (quantidade × preço) dos produtos na janela hoje…hoje+7, em centavos — ✅ automatizado.
@@ -505,9 +646,10 @@ Roteiro sugerido (≈ 8 min):
 2. **Cadastro e validação:** cadastrar um produto; tentar preço negativo, quantidade negativa, campos vazios e data impossível (30/02) e mostrar as mensagens.
 3. **Regras de validade:** cadastrar produtos com validade ontem, hoje, daqui a 7 e a 8 dias e mostrar os selos (texto + cor).
 4. **Indicadores:** mostrar os 4 cards; usar o exemplo do PDF (A: 10 × R$ 5,00 e B: 8 × R$ 3,00 a vencer → **R$ 74,00**) e explicar que é estimativa, não prejuízo.
-5. **Filtros e busca:** por categoria, situação, nome e código, combinados, com paginação.
+5. **Gráficos e relatório:** mostrar a rosca e as barras na Home, a tela de Relatórios (tabela por categoria), exportar o CSV e salvar o relatório como PDF; estreitar a janela para mostrar o menu hambúrguer.
+5b. **Filtros e busca:** por categoria, situação, estoque baixo, nome e código, combinados, com paginação.
 6. **Editar e excluir** (com confirmação) e ver os indicadores atualizarem.
 7. **Persistência:** reiniciar o backend e mostrar que os dados continuam.
-8. **Qualidade:** executar `cd backend && npm test` (162 testes) e `cd frontend && npm test`; citar a conferência por oráculo independente e a validação por mutação.
+8. **Qualidade:** executar `cd backend && npm test` (192 testes) e `cd frontend && npm test` (37 testes); citar a conferência por oráculo independente e a validação por mutação.
 
 Referência visual: sidebar escura, cabeçalho claro, lista à esquerda e resumo à direita (aproveitando só o layout; vendas, lojas, carrinho e código de barras estão fora de escopo).

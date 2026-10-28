@@ -115,7 +115,7 @@ test('barras: valor total zero mostra mensagem em vez de barras vazias', () => {
 
 test('tabela do relatório: linhas, totais por categoria e estado vazio', () => {
   const html = render(h(TabelaCategorias, { categorias: DADOS.por_categoria, janelaDias: 7 }))
-  assert.ok(html.includes('<caption>Indicadores por categoria</caption>'))
+  assert.ok(html.includes('<caption class="sr-only">Indicadores por categoria</caption>'))
   assert.ok(html.includes('scope="row">Laticínios') && html.includes('R$ 74,00'))
   assert.ok(render(h(TabelaCategorias, { categorias: [], janelaDias: 7 })).includes('Nenhum produto cadastrado'))
 })
@@ -134,4 +134,74 @@ test('card de produto: selo de situação, selo de estoque baixo e mínimo', () 
   const normal = render(h(ProdutoCard, { produto: { ...base, estoque_minimo: 0, estoque_baixo: false }, onEditar: noop, onExcluir: noop }))
   assert.ok(!normal.includes('Estoque baixo') && !normal.includes('mínimo'))
   assert.equal(render(h(SeloSituacao, { situacao: 'inexistente' })), '')
+})
+
+// ---- Ajuste: gráfico limitado às 10 categorias de maior valor ----
+const categoria = (nome, valor) => ({ categoria: nome, total_produtos: 1, produtos_vencidos: 0, produtos_a_vencer: valor > 0 ? 1 : 0, produtos_dentro: 0, valor_em_risco: valor })
+const geradas = (n) => Array.from({ length: n }, (_, i) => categoria(`Cat ${String(i + 1).padStart(2, '0')}`, (n - i) * 100))
+const linhasDoGrafico = (html) => (html.match(/class="barras__linha"/g) || []).length
+const grafico = (cats) => render(h(BarrasValorCategoria, { categorias: cats, valorTotal: cats.reduce((a, c) => a + c.valor_em_risco, 0), janelaDias: 7 }))
+
+test('gráfico: com menos de 10 categorias mostra todas, sem aviso de omissão', () => {
+  const html = grafico(geradas(4))
+  assert.equal(linhasDoGrafico(html), 4)
+  assert.ok(!html.includes('Exibindo as'))
+})
+
+test('gráfico: com exatamente 10 categorias mostra todas, sem aviso de omissão', () => {
+  const html = grafico(geradas(10))
+  assert.equal(linhasDoGrafico(html), 10)
+  assert.ok(!html.includes('Exibindo as'))
+})
+
+test('gráfico: com 11 ou mais mostra só as 10 de maior valor e avisa quantas foram omitidas', () => {
+  const cats = geradas(13) // valores 1300, 1200, ..., 100
+  const html = grafico(cats)
+  assert.equal(linhasDoGrafico(html), 10)
+  assert.ok(html.includes('Cat 01') && html.includes('Cat 10'))
+  assert.ok(!html.includes('Cat 11') && !html.includes('Cat 12') && !html.includes('Cat 13'))
+  assert.ok(html.includes('Exibindo as 10 categorias com maior valor estimado em risco (13 no total; 3 omitidas)'))
+  assert.ok(grafico(geradas(11)).includes('1 omitida'))
+})
+
+test('gráfico: ordem decrescente por valor mesmo se a lista chegar embaralhada', () => {
+  const html = grafico([categoria('B', 200), categoria('A', 900), categoria('C', 500)])
+  const ordem = [...html.matchAll(/barras__rotulo">([^<]+)</g)].map((m) => m[1])
+  assert.deepEqual(ordem, ['A', 'C', 'B'])
+})
+
+test('gráfico: o total e a nota consideram TODAS as categorias, inclusive as omitidas', () => {
+  const cats = geradas(12) // soma de 100 a 1200 = 7800 -> R$ 78,00
+  const html = grafico(cats)
+  assert.ok(html.includes('total R$ 78,00'))
+  assert.ok(html.includes('não é prejuízo confirmado'))
+  assert.ok(html.includes('R$ 12,00')) // maior valor
+})
+
+test('gráfico: valores zero continuam aparecendo (como antes) quando cabem entre as 10', () => {
+  const html = grafico([categoria('Com valor', 500), categoria('Sem valor', 0)])
+  assert.equal(linhasDoGrafico(html), 2)
+  assert.ok(html.includes('Sem valor') && html.includes('R$ 0,00'))
+  assert.ok(html.includes('data-largura="0"'))
+})
+
+test('gráfico: com mais de 10 categorias as de valor zero são as primeiras a ficar de fora', () => {
+  const cats = [...geradas(10), categoria('Zero A', 0), categoria('Zero B', 0)]
+  const html = grafico(cats)
+  assert.equal(linhasDoGrafico(html), 10)
+  assert.ok(!html.includes('Zero A') && !html.includes('Zero B'))
+  assert.ok(html.includes('2 omitidas'))
+})
+
+test('gráfico: todos os valores zero mantém a mensagem de "nenhum valor em risco", sem barras nem aviso', () => {
+  const html = grafico([categoria('A', 0), categoria('B', 0)])
+  assert.ok(html.includes('Nenhum valor em risco') && !html.includes('barras__linha') && !html.includes('Exibindo as'))
+})
+
+test('gráfico: não altera a lista recebida (a tabela continua com todas)', () => {
+  const cats = geradas(12)
+  const copia = JSON.stringify(cats)
+  grafico(cats)
+  assert.equal(JSON.stringify(cats), copia)
+  assert.equal(cats.length, 12)
 })

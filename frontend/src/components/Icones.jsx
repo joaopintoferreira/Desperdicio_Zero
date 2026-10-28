@@ -7,3 +7,5 @@ export const IconeBusca = () => <svg {...props}><circle cx="11" cy="11" r="7" />
 export const IconeRelatorios = () => <svg {...props}><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-8" /><path d="M22 20H2" /></svg>
 export const IconeMenu = () => <svg {...props} width="22" height="22"><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h16" /></svg>
 export const IconeFechar = () => <svg {...props} width="22" height="22"><path d="M6 6l12 12" /><path d="M18 6L6 18" /></svg>
+export const IconeSetaBaixo = () => <svg {...props}><path d="M6 9l6 6 6-6" /></svg>
+export const IconeSetaCima = () => <svg {...props}><path d="M6 15l6-6 6 6" /></svg>

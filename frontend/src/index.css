@@ -296,3 +296,16 @@ select:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
   .indicador, .grafico, .tabela tr { break-inside: avoid; }
   * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+/* ---- Ajustes da Fase 6: seção recolhível e limite do gráfico ---- */
+.recolhivel { margin-top: 20px; }
+.recolhivel__cabecalho { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.recolhivel__titulo { margin: 0; font-size: 1rem; }
+.recolhivel__botao { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
+.recolhivel__conteudo[hidden] { display: none; }
+.recolhivel__conteudo .tabela-rolagem { margin-top: 12px; }
+.grafico__nota--limite { font-style: italic; }
+@media print {
+  /* O relatório impresso sempre traz a tabela completa, mesmo com a seção recolhida na tela. */
+  .recolhivel__conteudo[hidden] { display: block !important; }
+}

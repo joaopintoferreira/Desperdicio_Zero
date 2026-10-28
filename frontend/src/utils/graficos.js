@@ -35,3 +35,19 @@ export function segmentosRosca(itens, raio) {
   }
   return { circunferencia, segmentos }
 }
+
+// Máximo de categorias desenhadas no gráfico de barras. Só limita a VISUALIZAÇÃO: a API e a
+// tabela "Indicadores por categoria" continuam com todas as categorias.
+export const LIMITE_CATEGORIAS_GRAFICO = 10
+
+// Escolhe as categorias do gráfico: maior valor em risco primeiro; empate pelo nome (sem diferenciar
+// maiúsculas e acentos, depois pelo texto exato), para a ordem ser sempre a mesma. Não altera a lista
+// recebida. Devolve { exibidas, omitidas } (omitidas = quantas ficaram de fora).
+export function categoriasDoGrafico(categorias, limite = LIMITE_CATEGORIAS_GRAFICO) {
+  const ordenadas = [...categorias].sort(
+    (a, b) => b.valor_em_risco - a.valor_em_risco
+      || a.categoria.localeCompare(b.categoria, 'pt-BR', { sensitivity: 'base' })
+      || (a.categoria < b.categoria ? -1 : a.categoria > b.categoria ? 1 : 0),
+  )
+  return { exibidas: ordenadas.slice(0, limite), omitidas: Math.max(0, ordenadas.length - limite) }
+}

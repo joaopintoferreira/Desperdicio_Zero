@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Indicadores from '../components/Indicadores'
 import GraficosIndicadores from '../components/graficos/GraficosIndicadores'
 import TabelaCategorias from '../components/TabelaCategorias'
+import SecaoRecolhivel from '../components/SecaoRecolhivel'
 import AlertaEstoqueBaixo from '../components/AlertaEstoqueBaixo'
 import useIndicadores from '../hooks/useIndicadores'
 import { baixarCsvAVencer } from '../services/api'
@@ -66,7 +67,11 @@ export default function RelatoriosPage() {
       <AlertaEstoqueBaixo quantidade={dados?.produtos_estoque_baixo} />
       <Indicadores estado={estado} />
       <GraficosIndicadores estado={estado} />
-      {dados && <TabelaCategorias categorias={dados.por_categoria} janelaDias={dados.janela_alerta_dias} />}
+      {dados && (
+        <SecaoRecolhivel id="indicadores-por-categoria" titulo="Indicadores por categoria">
+          <TabelaCategorias categorias={dados.por_categoria} janelaDias={dados.janela_alerta_dias} />
+        </SecaoRecolhivel>
+      )}
     </section>
   )
 }

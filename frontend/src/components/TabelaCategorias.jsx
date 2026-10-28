@@ -6,7 +6,7 @@ export default function TabelaCategorias({ categorias, janelaDias }) {
   return (
     <div className="tabela-rolagem">
       <table className="tabela">
-        <caption>Indicadores por categoria</caption>
+        <caption className="sr-only">Indicadores por categoria</caption>
         <thead>
           <tr>
             <th scope="col">Categoria</th>

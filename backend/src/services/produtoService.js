@@ -6,10 +6,13 @@ const { SITUACOES, classificar, intervaloSituacao } = require('./validadeService
 const LIMITE_PADRAO = 20;
 const LIMITE_MAXIMO = 100;
 
+const PAGINA_MAXIMA = 1_000_000; // mantém o OFFSET dentro de inteiros seguros do SQLite
+
+// Parâmetro numérico de paginação: só dígitos (rejeita "1e2", "0x10", " 5", "+5") e dentro do limite.
 function inteiroPositivo(texto, campo, padrao, max) {
   if (texto === undefined || texto === '') return padrao;
-  const n = Number(texto);
-  if (!Number.isInteger(n) || n < 1 || (max && n > max)) {
+  const n = typeof texto === 'string' && /^\d+$/.test(texto) ? Number(texto) : NaN;
+  if (!Number.isSafeInteger(n) || n < 1 || (max && n > max)) {
     const faixa = max ? `entre 1 e ${max}` : 'maior ou igual a 1';
     throw new ErroApp(400, 'Parâmetros inválidos', { [campo]: `${campo} deve ser um inteiro ${faixa}` });
   }
@@ -64,10 +67,10 @@ function criarProdutoService(model, { hoje }) {
 
   return {
     listar({ busca, categoria, situacao, pagina, limite }) {
-      const termo = typeof busca === 'string' ? busca.trim() : '';
+      const termo = textoOpcional(busca, 'busca');
       const categoriaTxt = textoOpcional(categoria, 'categoria'); // vazio = sem filtro
       const situacaoSel = lerSituacao(situacao);
-      const paginaN = inteiroPositivo(pagina, 'pagina', 1);
+      const paginaN = inteiroPositivo(pagina, 'pagina', 1, PAGINA_MAXIMA);
       const limiteN = inteiroPositivo(limite, 'limite', LIMITE_PADRAO, LIMITE_MAXIMO);
 
       // "hoje" é lido uma vez: o filtro e o campo `situacao` usam a mesma data de referência.

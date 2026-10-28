@@ -256,7 +256,7 @@ cd frontend && npm run dev      # UI em http://localhost:5173
 ```
 ```bash
 cd backend  && npm test         # 192 testes (API, validade, filtros, indicadores, fronteiras, fluxos, relatórios, estoque, migração)
-cd frontend && npm test         # 37 testes (moeda/data, menu, gráficos, consultas assíncronas, componentes renderizados)
+cd frontend && npm test         # 63 testes (moeda/data, menu, gráficos, Top 10, consultas assíncronas, componentes e interação com jsdom)
 cd frontend && npm run build    # build de produção em frontend/dist
 ```
 
@@ -273,7 +273,7 @@ cd frontend && npm run build    # build de produção em frontend/dist
 | Comando | Resultado |
 |---|---|
 | `cd backend && npm test` | **192 de 192 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4 + 53 da Fase 5 + 30 da Fase 6) |
-| `cd frontend && npm test` | **37 de 37 passaram** (10 anteriores + 27 da Fase 6) |
+| `cd frontend && npm test` | **63 de 63 passaram** (10 anteriores + 27 da Fase 6 + 26 dos ajustes de Top 10 e seção recolhível) |
 | `cd frontend && npm run build` | ✅ concluído |
 | Ponta a ponta com o banco SQLite real (curl), na Fase 2: criar → editar → reiniciar → consultar → excluir | ✅ dados persistiram após reinício; 400 e 404 em JSON conferidos |
 | Fase 3 com o **relógio real**, banco temporário (curl): produtos com validade ontem, hoje, +7 e +8 dias em São Paulo | ✅ `vencido`, `proximo`, `proximo`, `dentro`; filtros e `/categorias` coerentes |
@@ -330,6 +330,8 @@ Testes do backend usam banco `:memory:` ou arquivo temporário, nunca `backend/d
 | Autorizado — menu hambúrguer | `Sidebar`, `Header`, `App`, `utils/menu.js`, CSS ≤ 800 px | `menu.test.js`, `componentes.test.js` (aria, gaveta) | ✅ lógica e marcação testadas · comportamento real: validação manual pendente |
 | Autorizado — gráficos na Home | `graficos/` (rosca e barras), `useIndicadores`, `utils/graficos.js` | `graficos.test.js`, `componentes.test.js`, `relatorios.test.js` (por categoria × oráculo) | ✅ dados e renderização testados · desenho real: validação manual pendente |
 | Autorizado — tela de Relatórios | `RelatoriosPage`, `TabelaCategorias` | `componentes.test.js`, consistência por categoria | ✅ testado · UI: validação manual pendente |
+| Ajuste — gráfico limitado ao Top 10 por valor | `utils/graficos.js` (`categoriasDoGrafico`), `BarrasValorCategoria` | `graficos.test.js`, `componentes.test.js`, `relatorios.interacao.test.js` | ✅ testado · desenho real: validação manual pendente |
+| Ajuste — seção "Indicadores por categoria" recolhível | `SecaoRecolhivel`, `RelatoriosPage` | `relatorios.interacao.test.js` (clique, `aria-*`, dados completos) | ✅ testado (jsdom) · teclado/visual: validação manual pendente |
 | Respostas assíncronas antigas não substituem as novas | `utils/consulta.js`, `useIndicadores`, `ProdutosPage` | `consulta.test.js` | ✅ lógica testada |
 | PDF cenário 16 (vazio) / PDF §13 mensagens | zeros e `R$ 0,00`, estado de erro sem valores | banco vazio | ✅ API · UI pendente |
 | RNF08 responsividade | CSS com `@media` | — | ⚠️ não confirmada individualmente (validação geral da UI feita pelo usuário) |
@@ -438,7 +440,7 @@ Os itens 4 e 5 foram identificados por **leitura do código**, não por teste au
 | RNF04 | Validação no frontend e no backend | Backend: testado automaticamente; frontend: conveniência (vazios, negativos, tipos), sem teste de componente |
 | RNF05 | Segurança básica | Sem credenciais no repositório; CORS restrito e configurável; SQL parametrizado; erros 5xx sem detalhes internos — testado |
 | RNF06 | Indicadores iguais aos registros reais | Testado contra oráculo independente e contra cópia da base real |
-| RNF07 | Testabilidade: testes das regras e operações críticas | 192 testes de backend e 37 de frontend (utilitários e componentes renderizados) |
+| RNF07 | Testabilidade: testes das regras e operações críticas | 192 testes de backend e 63 de frontend (utilitários, componentes e interação em jsdom) |
 | RNF08 | Responsividade | CSS responsivo (`@media`); menu hambúrguer na Fase 6; Fase 5 validada pelo usuário, Fase 6 pendente |
 
 ### Diagrama de fluxo (requisição → regra → resposta)
@@ -464,7 +466,7 @@ flowchart TD
 ### Resultados alcançados
 - Aplicação Full Stack funcional (React + Express + SQLite) com CRUD, pesquisa, paginação, classificação de validade (RN01–RN03), filtros por situação e categoria, dashboard com 4 indicadores e valor em risco (RN04).
 - Regras de negócio centralizadas no backend; valores monetários em centavos inteiros do banco à exibição.
-- 192 testes automatizados de backend e 37 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
+- 192 testes automatizados de backend e 63 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
 - Homologação manual pelo usuário das Fases 1 a 5 (informada); Fase 6 pendente.
 - Extras da Fase 6 (CSV, relatório em PDF, estoque baixo), menu hambúrguer, gráficos e tela de Relatórios implementados e testados automaticamente.
 - Fases 1 a 5 sem funcionalidade fora do escopo documental (sem login, vendas, notificações, IA ou app móvel).
@@ -497,7 +499,7 @@ Os documentos não definem formato do CSV, do PDF nem a regra exata do estoque b
 | Biblioteca de gráficos | **Nenhuma**: gráficos em SVG/CSS próprios | Decisão do assistente (abaixo) |
 | Tipos de gráfico | Rosca (proporção por situação) e barras horizontais (valor em risco por categoria) | Decisão do assistente (abaixo) |
 
-**Por que não há biblioteca de gráficos.** Nenhuma estava instalada; os dados são poucos (3 situações e algumas categorias) e os dois gráficos são simples. Uma biblioteca (ex.: Recharts) aumentaria o bundle e as dependências, e esta instalação já teve problemas com o npm. O SVG/CSS próprio é pequeno, acessível (cada gráfico tem rótulo em texto, legenda e resumo para leitor de tela) e fácil de testar. Única dependência de desenvolvimento adicionada: `esbuild` (já usado pelo Vite) para testar os componentes com `node:test`.
+**Por que não há biblioteca de gráficos.** Nenhuma estava instalada; os dados são poucos (3 situações e algumas categorias) e os dois gráficos são simples. Uma biblioteca (ex.: Recharts) aumentaria o bundle e as dependências, e esta instalação já teve problemas com o npm. O SVG/CSS próprio é pequeno, acessível (cada gráfico tem rótulo em texto, legenda e resumo para leitor de tela) e fácil de testar. Dependências de desenvolvimento adicionadas: `esbuild` (já usado pelo Vite) para testar componentes com `node:test` e `jsdom`, para simular cliques e `aria-*` reais nesses testes; nenhuma entra no bundle de produção.
 
 ### Menu responsivo (hambúrguer)
 - **Telas grandes (> 800 px):** barra lateral fixa, igual à homologada.
@@ -510,12 +512,12 @@ Ficam logo abaixo dos 4 cards na Home e também na tela de Relatórios, e usam *
 | Gráfico | Dados | Observações |
 |---|---|---|
 | **Rosca — Situação dos produtos** | `produtos_vencidos`, `produtos_a_vencer`, `produtos_dentro` | Mostra a proporção; a legenda traz contagem e percentual (1 casa decimal). Os percentuais arredondados podem não somar exatamente 100,0%. Centro: total de produtos |
-| **Barras — Valor estimado em risco por categoria** | `por_categoria[].valor_em_risco` (RN04 agrupado) | Em R$ pt-BR; sem produtos a vencer mostra "Nenhum valor em risco (R$ 0,00)" em vez de barras vazias; traz a nota "estimativa, não prejuízo" |
+| **Barras — Valor estimado em risco por categoria** | `por_categoria[].valor_em_risco` (RN04 agrupado) | **Top 10:** mostra no máximo as 10 categorias de maior valor (decrescente; empate pelo nome, sem diferenciar caixa e acento) e, havendo omitidas, uma nota discreta ("Exibindo as 10 categorias … N no total; X omitidas"). O limite vale **só para o desenho**: a API, a tabela por categoria e o total geral (nota e rótulo do gráfico) usam todas as categorias. Categorias com valor 0 continuam aparecendo quando cabem; com mais de 10 são as primeiras a ficar de fora. Em R$ pt-BR; sem produtos a vencer mostra "Nenhum valor em risco (R$ 0,00)" em vez de barras vazias; traz a nota "estimativa, não prejuízo" |
 
 A comparação de **quantidades** por situação está nos cards e na legenda da rosca (com contagem). Não há gráfico temporal, tendência ou previsão, porque o sistema não guarda histórico. Estoque vazio, carregamento e erro de API têm mensagem própria (sem números inventados).
 
 ### Tela de Relatórios
-Nova opção do menu (**Relatórios**): retrato do estoque no momento da consulta, com a **data de referência** da classificação, as definições de vencido / a vencer / dentro da validade, a explicação de que o valor em risco é estimativa, os 4 cards, o aviso de estoque baixo, os gráficos, a tabela **por categoria** (total, vencidos, a vencer, dentro, valor em risco) e dois botões: **Exportar produtos a vencer (CSV)** e **Imprimir / Salvar como PDF** (a impressão oculta menu, cabeçalho e botões e mostra um título próprio).
+Nova opção do menu (**Relatórios**): retrato do estoque no momento da consulta, com a **data de referência** da classificação, as definições de vencido / a vencer / dentro da validade, a explicação de que o valor em risco é estimativa, os 4 cards, o aviso de estoque baixo, os gráficos, a seção **Indicadores por categoria** (tabela com total, vencidos, a vencer, dentro e valor em risco de **todas** as categorias; **começa recolhida** e tem botão **Expandir / Ocultar** com `aria-expanded` e `aria-controls="indicadores-por-categoria"`) e dois botões: **Exportar produtos a vencer (CSV)** e **Imprimir / Salvar como PDF** (a impressão oculta menu, cabeçalho e botões e mostra um título próprio; **a tabela por categoria sai impressa completa mesmo com a seção recolhida na tela**, e o botão Expandir não é impresso). O estado expandido/recolhido não afeta cards, gráficos, CSV nem impressão.
 
 ### Alerta de estoque baixo
 Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoque baixo** no card e "(mínimo N)" na linha de estoque; filtro **Estoque → Estoque baixo** na lista (combina com os demais filtros); aviso com a quantidade na Home e no Relatório (`produtos_estoque_baixo`). O estoque baixo **não** é um quinto card nem altera os indicadores existentes.
@@ -526,6 +528,8 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 - Estoque baixo: regra, validação, filtro e consistência SQL × JavaScript — ✅ automatizado.
 - Indicadores por categoria iguais ao total e a um oráculo independente; indicadores antigos inalterados — ✅ automatizado.
 - Estados dos gráficos (carregando, erro, vazio, dados), rótulos acessíveis, menu com `aria-*` — ✅ renderização testada.
+- Gráfico de barras limitado às 10 categorias de maior valor, com ordenação e desempate determinísticos, sem truncar os dados completos — ✅ automatizado.
+- Seção "Indicadores por categoria": começa recolhida; clique alterna Expandir/Ocultar e `aria-expanded`; dados completos preservados; demais componentes inalterados — ✅ automatizado (clique real em jsdom); aparência e teclado reais ⏳ validação manual pendente.
 - Respostas assíncronas antigas não sobrescrevem as novas — ✅ lógica testada (`consulta.js`, usada em `useIndicadores`); a lista de produtos usa a mesma técnica desde a Fase 5.
 - Abertura e fechamento reais do menu, foco, layout em celular/tablet, gráficos desenhados, impressão e download do CSV — ⏳ **validação manual pendente**.
 
@@ -555,12 +559,15 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 - [ ] Cadastrar, editar (quantidade, preço, validade ou categoria) e excluir produtos e voltar à Home: gráficos e cards se atualizam juntos.
 - [ ] Filtros e busca da página Produtos **não** alteram os gráficos.
 - [ ] **Estoque vazio** (use um banco de teste: `DB_PATH=/tmp/vazio.db npm start`): a Home mostra a mensagem "Nenhum produto cadastrado" no lugar dos gráficos e zeros nos cards.
+- [ ] **Top 10:** com mais de 10 categorias cadastradas, o gráfico mostra só 10 barras, da maior para a menor, e a nota "Exibindo as 10 categorias com maior valor estimado em risco (N no total; X omitidas)"; com 10 ou menos não há nota. (Para testar, use um banco temporário com 11+ categorias, cada uma com um produto a vencer.)
 - [ ] Sem produtos a vencer: as barras mostram "Nenhum valor em risco (R$ 0,00)".
 - [ ] **Erro:** com o backend parado, cards e gráficos mostram mensagem de erro e "Tentar novamente", sem números; ao religar e clicar, voltam.
 
 **D. Relatórios**
 - [ ] A opção Relatórios aparece no menu e abre a tela; título "Relatórios de indicadores".
 - [ ] A tela mostra a data de referência (hoje), as definições, a nota de que o valor é estimativa, os cards, os gráficos e a tabela por categoria.
+- [ ] **Indicadores por categoria:** a seção abre **recolhida**, com botão "Expandir" e seta para baixo; clicar mostra a tabela com **todas** as categorias (inclusive as omitidas do gráfico) e o botão passa a "Ocultar" com seta para cima; clicar de novo recolhe só essa seção (cards, gráficos e botões não mudam); funciona com Tab + Enter/Espaço e o foco é visível; em celular o cabeçalho da seção e o botão cabem na tela.
+- [ ] A **impressão / PDF** mostra a tabela por categoria completa mesmo com a seção recolhida, sem o botão Expandir.
 - [ ] Os números dos cards, dos gráficos da Home, dos gráficos do Relatório e da tabela são **iguais** (some as colunas da tabela e compare com os cards).
 - [ ] **Exportar produtos a vencer (CSV)** baixa `produtos-a-vencer-AAAA-MM-DD.csv`; abrir no Excel/LibreOffice: acentos corretos, colunas separadas, só os produtos a vencer, valores em reais e soma da última coluna igual ao valor em risco.
 - [ ] **Imprimir / Salvar como PDF** abre a impressão; na pré-visualização não aparecem menu, cabeçalho nem botões, e os gráficos aparecem com cores; salvar como PDF funciona.
@@ -593,7 +600,8 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 
 - A interface foi validada manualmente pelo usuário, mas **não por testes automatizados**: os componentes React não têm testes. Responsividade, teclado e diálogos não foram confirmados individualmente.
 - **Fase 6:** a regra do estoque baixo (`quantidade ≤ mínimo`, mínimo 0 = sem alerta) é decisão do assistente, não dos documentos. O "PDF" é a impressão do navegador (não há geração de arquivo PDF no servidor). O CSV exporta só os produtos a vencer.
-- Os gráficos são do estado atual do estoque: não mostram evolução no tempo (não há histórico). Com muitas categorias, o gráfico de barras fica longo (a tabela do Relatório lista todas).
+- O gráfico de barras mostra no máximo 10 categorias; as demais só aparecem na tabela (Relatórios). Os testes de clique usam jsdom, não um navegador real.
+- Os gráficos são do estado atual do estoque: não mostram evolução no tempo (não há histórico). 
 - As interações do menu (abrir, fechar, foco), o desenho real dos gráficos, a impressão e o download do CSV não têm teste automatizado em navegador; são verificados pelo checklist manual.
 - `pagina`/`limite` são estritos (apenas dígitos; `pagina` ≤ 1.000.000).
 - A busca por palavra de um campo é feita com `LIKE`; códigos diferenciam maiúsculas de minúsculas ("abc" e "ABC" são códigos distintos).
@@ -650,6 +658,6 @@ Roteiro sugerido (≈ 8 min):
 5b. **Filtros e busca:** por categoria, situação, estoque baixo, nome e código, combinados, com paginação.
 6. **Editar e excluir** (com confirmação) e ver os indicadores atualizarem.
 7. **Persistência:** reiniciar o backend e mostrar que os dados continuam.
-8. **Qualidade:** executar `cd backend && npm test` (192 testes) e `cd frontend && npm test` (37 testes); citar a conferência por oráculo independente e a validação por mutação.
+8. **Qualidade:** executar `cd backend && npm test` (192 testes) e `cd frontend && npm test` (63 testes); citar a conferência por oráculo independente e a validação por mutação.
 
 Referência visual: sidebar escura, cabeçalho claro, lista à esquerda e resumo à direita (aproveitando só o layout; vendas, lojas, carrinho e código de barras estão fora de escopo).

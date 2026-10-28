@@ -14,6 +14,28 @@ let seq = 0;
 const criar = (extra) => api.req('POST', '/api/produtos', produtoValido({ codigo: `R${++seq}`, ...extra }));
 const indicadores = async () => (await api.req('GET', '/api/indicadores')).corpo;
 
+// Leitor de CSV de teste: respeita aspas ("" = aspas literais) e quebras de linha dentro de campos.
+// `delimitadores` simula o programa de planilha: [';'] (só ponto e vírgula) ou [';', ','] (detecção
+// automática, que também trata a vírgula como separador fora das aspas).
+function lerCsv(texto, delimitadores = [';']) {
+  const linhas = [];
+  let linha = [];
+  let campo = '';
+  let aspas = false;
+  const t = texto.replace(/^\uFEFF/, '');
+  for (let i = 0; i < t.length; i += 1) {
+    const c = t[i];
+    if (aspas) {
+      if (c === '"') { if (t[i + 1] === '"') { campo += '"'; i += 1; } else aspas = false; } else campo += c;
+    } else if (c === '"') aspas = true;
+    else if (delimitadores.includes(c)) { linha.push(campo); campo = ''; }
+    else if (c === '\n') { linha.push(campo.replace(/\r$/, '')); linhas.push(linha); linha = []; campo = ''; }
+    else campo += c;
+  }
+  if (campo !== '' || linha.length) { linha.push(campo); linhas.push(linha); }
+  return linhas;
+}
+
 describe('indicadores por categoria (gráficos e relatório)', () => {
   test('sem produtos: lista vazia e produtos_dentro = 0', async () => {
     const i = await indicadores();
@@ -134,14 +156,15 @@ describe('exportação CSV — produtos a vencer (PDF §6.5)', () => {
     assert.deepEqual(cod, ['HOJE', 'B', 'A', 'MAIS7']);
   });
 
-  test('valores em reais com vírgula decimal; soma das linhas = valor em risco', async () => {
+  test('valores em reais com vírgula decimal (entre aspas); soma das linhas = valor em risco', async () => {
     await criar({ codigo: 'A', nome: 'A', categoria: 'c', quantidade: 10, preco_unitario: 500, data_validade: '2026-11-12' });
     await criar({ codigo: 'B', nome: 'B', categoria: 'c', quantidade: 3, preco_unitario: 1999, data_validade: '2026-11-13' });
-    const ls = linhas((await baixar()).texto);
-    assert.equal(ls[1], 'A;A;c;10;5,00;2026-11-12;50,00');
-    assert.equal(ls[2], 'B;B;c;3;19,99;2026-11-13;59,97');
-    const somaCsv = ls.slice(1).reduce((a, l) => a + Number(l.split(';')[6].replace(',', '')), 0);
-    assert.equal(somaCsv, (await indicadores()).valor_em_risco);
+    const { texto } = await baixar();
+    const ls = linhas(texto);
+    assert.equal(ls[1], 'A;A;c;10;"5,00";2026-11-12;"50,00"');
+    assert.equal(ls[2], 'B;B;c;3;"19,99";2026-11-13;"59,97"');
+    const reais = lerCsv(texto).slice(1).map((c) => Number(c[6].replace(',', '')));
+    assert.equal(reais.reduce((a, v) => a + v, 0), (await indicadores()).valor_em_risco);
   });
 
   test('textos com ; aspas e quebra de linha são protegidos; fórmulas são neutralizadas', async () => {
@@ -166,6 +189,104 @@ describe('exportação CSV — produtos a vencer (PDF §6.5)', () => {
     const r = await api.req('POST', '/api/relatorios/produtos-a-vencer.csv', {});
     assert.equal(r.status, 404);
     assert.equal(api.contar(), 1);
+  });
+});
+
+describe('exportação CSV — colunas e vírgula decimal (correção)', () => {
+  const baixarTexto = async () => {
+    const resp = await fetch(`${api.base}/api/relatorios/produtos-a-vencer.csv`);
+    return Buffer.from(await resp.arrayBuffer()).toString('utf8');
+  };
+  const CABECALHO = ['Código', 'Nome', 'Categoria', 'Quantidade', 'Preço unitário (R$)', 'Data de validade', 'Valor estimado (R$)'];
+
+  test('exemplo Cebola: 25 × R$ 5,99 → preço 5,99 e valor estimado 149,75, em 7 colunas', async () => {
+    await criar({ codigo: '1', nome: 'Cebola', categoria: 'Alimento', quantidade: 25, preco_unitario: 599, data_validade: '2026-11-12' });
+    const texto = await baixarTexto();
+    // linha bruta: os valores com vírgula vão entre aspas
+    assert.equal(texto.replace(/^\uFEFF/, '').split('\r\n')[1], '1;Cebola;Alimento;25;"5,99";2026-11-12;"149,75"');
+    for (const delims of [[';'], [';', ',']]) {
+      const l = lerCsv(texto, delims);
+      assert.deepEqual(l[0], CABECALHO, `cabeçalho com ${JSON.stringify(delims)}`);
+      assert.deepEqual(l[1], ['1', 'Cebola', 'Alimento', '25', '5,99', '2026-11-12', '149,75'], `linha com ${JSON.stringify(delims)}`);
+    }
+  });
+
+  test('toda linha tem exatamente 7 colunas, mesmo se o leitor tratar a vírgula como separador', async () => {
+    const nomes = ['Simples', 'Arroz, tipo 1', 'Pão; "integral"', 'Açúcar refinado União', 'a\nb', '=SOMA(1;2)', "O'Brien", 'Café, "forte"; 100%'];
+    for (const [k, nome] of nomes.entries()) {
+      await criar({ codigo: `C${k}`, nome, categoria: k % 2 ? 'Mercearia, geral' : 'Bebidas', quantidade: k * 7 + 1, preco_unitario: 100 + k * 133, data_validade: '2026-11-12' });
+    }
+    const texto = await baixarTexto();
+    for (const delims of [[';'], [';', ',']]) {
+      const l = lerCsv(texto, delims);
+      assert.equal(l.length, nomes.length + 1);
+      for (const [i, cols] of l.entries()) assert.equal(cols.length, 7, `linha ${i} com ${JSON.stringify(delims)}: ${JSON.stringify(cols)}`);
+    }
+  });
+
+  test('preços e valores com centavos variados ficam inteiros na célula e iguais à conta em centavos', async () => {
+    const itens = [[1, 1], [3, 1999], [7, 5], [12, 333], [999, 7], [1, 100000], [2, 99]];
+    for (const [k, [quantidade, preco_unitario]] of itens.entries()) {
+      await criar({ codigo: `V${k}`, nome: `P${k}`, categoria: 'c', quantidade, preco_unitario, data_validade: '2026-11-12' });
+    }
+    const l = lerCsv(await baixarTexto(), [';', ',']).slice(1);
+    const fmt = (c) => `${Math.floor(c / 100)},${String(c % 100).padStart(2, '0')}`;
+    for (const [k, [quantidade, preco]] of itens.entries()) {
+      assert.equal(l[k][4], fmt(preco), `preço ${k}`);
+      assert.equal(l[k][6], fmt(quantidade * preco), `valor ${k}`);
+    }
+  });
+
+  test('nome e categoria com ;  "  , quebra de linha e acentos voltam idênticos depois de lidos', async () => {
+    const nome = 'Pão de Açúcar; "integral", 500g\nlote 2';
+    const categoria = 'Padaria, Confeitaria; “Premium”';
+    await criar({ codigo: 'ESC', nome, categoria, quantidade: 2, preco_unitario: 1050, data_validade: '2026-11-12' });
+    for (const delims of [[';'], [';', ',']]) {
+      const [, cols] = lerCsv(await baixarTexto(), delims);
+      assert.equal(cols.length, 7);
+      assert.equal(cols[1], nome);
+      assert.equal(cols[2], categoria);
+      assert.equal(cols[4], '10,50');
+      assert.equal(cols[6], '21,00');
+    }
+  });
+
+  test('BOM UTF-8 preservado e proteção contra fórmulas mantida (com e sem vírgula)', async () => {
+    await criar({ codigo: 'F1', nome: '=1+1', categoria: '@x, y', quantidade: 1, preco_unitario: 100, data_validade: '2026-11-12' });
+    await criar({ codigo: 'F2', nome: '-2+3', categoria: '+SOMA(A1,A2)', quantidade: 1, preco_unitario: 100, data_validade: '2026-11-12' });
+    const resp = await fetch(`${api.base}/api/relatorios/produtos-a-vencer.csv`);
+    const bytes = Buffer.from(await resp.arrayBuffer());
+    assert.deepEqual([...bytes.subarray(0, 3)], [0xEF, 0xBB, 0xBF]);
+    const l = lerCsv(bytes.toString('utf8'), [';', ',']);
+    assert.equal(l[1][1], "'=1+1");
+    assert.equal(l[1][2], "'@x, y");
+    assert.equal(l[2][1], "'-2+3");
+    assert.equal(l[2][2], "'+SOMA(A1,A2)");
+    for (const cols of l) assert.equal(cols.length, 7);
+  });
+
+  test('sem produtos a vencer: cabeçalho com 7 colunas e nenhuma linha de dados', async () => {
+    const l = lerCsv(await baixarTexto(), [';', ',']);
+    assert.equal(l.length, 1);
+    assert.deepEqual(l[0], CABECALHO);
+  });
+});
+
+describe('csvService — vírgula e número de colunas (unidade)', () => {
+  test('célula com vírgula vai entre aspas; sem vírgula/;/aspas/quebra não leva aspas', () => {
+    assert.equal(celula('5,99'), '"5,99"');
+    assert.equal(celula('149,75'), '"149,75"');
+    assert.equal(celula('Arroz, tipo 1'), '"Arroz, tipo 1"');
+    assert.equal(celula('simples'), 'simples');
+    assert.equal(celula('2026-11-12'), '2026-11-12');
+  });
+  test('fórmula com vírgula: apóstrofo primeiro e aspas por fora', () => {
+    assert.equal(celula('=SOMA(A1,A2)'), '"\'=SOMA(A1,A2)"');
+  });
+  test('montarCsv recusa linha com número de colunas diferente do cabeçalho', () => {
+    assert.throws(() => montarCsv(['a', 'b'], [['1']]), /1 colunas; o cabeçalho tem 2/);
+    assert.throws(() => montarCsv(['a', 'b'], [['1', '2', '3']]), /3 colunas/);
+    assert.equal(montarCsv(['a', 'b'], [['1,5', 2]]), '\uFEFFa;b\r\n"1,5";2\r\n');
   });
 });
 

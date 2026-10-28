@@ -201,13 +201,13 @@ Erro de filtro: `GET /api/produtos?situacao=atrasado` → 400 `{"erro":"Parâmet
 ```
 `por_categoria` vem do mesmo cálculo e das mesmas definições do total (a soma das categorias é igual ao total geral); ordem: maior valor em risco primeiro, empate por nome. Os campos antigos mantêm a mesma definição.
 
-**`GET /api/relatorios/produtos-a-vencer.csv`** (mesmos dados; separador `;`, UTF-8 com BOM, quebras CRLF, valores em reais com vírgula, datas `YYYY-MM-DD`; células de texto que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo para não virarem fórmulas no Excel):
+**`GET /api/relatorios/produtos-a-vencer.csv`** (mesmos dados; separador de colunas `;`, UTF-8 com BOM, quebras CRLF, valores em reais com vírgula decimal, datas `YYYY-MM-DD`. **Toda célula que contém vírgula, `;`, aspas ou quebra de linha vai entre aspas** — por isso `"5,99"` não é partido em duas colunas mesmo que o programa de planilha trate a vírgula como separador. Células de texto que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo para não virarem fórmulas; toda linha tem exatamente as 7 colunas do cabeçalho, e o gerador recusa linhas com outro número de colunas):
 ```
 Código;Nome;Categoria;Quantidade;Preço unitário (R$);Data de validade;Valor estimado (R$)
-LEI001;Leite Integral 1L;Laticínios;10;5,00;2026-11-12;50,00
-QUE001;Queijo Minas;Laticínios;8;3,00;2026-11-17;24,00
+LEI001;Leite Integral 1L;Laticínios;10;"5,00";2026-11-12;"50,00"
+QUE001;Queijo Minas;Laticínios;8;"3,00";2026-11-17;"24,00"
 ```
-A soma da última coluna é o valor em risco (R$ 74,00). Sem produtos a vencer, o arquivo traz só o cabeçalho.
+A soma da última coluna é o valor em risco (R$ 74,00). Defeito corrigido: antes as vírgulas decimais saíam sem aspas e leitores que também aceitam `,` como separador partiam `5,99` em `5` e `99` (9 colunas em vez de 7); o arquivo continua sendo UTF-8 com BOM e delimitado por `;`. Sem produtos a vencer, o arquivo traz só o cabeçalho.
 
 Corpo de `POST`/`PUT`:
 ```json
@@ -255,7 +255,7 @@ cd backend  && npm start        # API em http://localhost:3001  (npm run dev rec
 cd frontend && npm run dev      # UI em http://localhost:5173
 ```
 ```bash
-cd backend  && npm test         # 192 testes (API, validade, filtros, indicadores, fronteiras, fluxos, relatórios, estoque, migração)
+cd backend  && npm test         # 201 testes (API, validade, filtros, indicadores, fronteiras, fluxos, relatórios, estoque, migração)
 cd frontend && npm test         # 63 testes (moeda/data, menu, gráficos, Top 10, consultas assíncronas, componentes e interação com jsdom)
 cd frontend && npm run build    # build de produção em frontend/dist
 ```
@@ -272,7 +272,7 @@ cd frontend && npm run build    # build de produção em frontend/dist
 
 | Comando | Resultado |
 |---|---|
-| `cd backend && npm test` | **192 de 192 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4 + 53 da Fase 5 + 30 da Fase 6) |
+| `cd backend && npm test` | **201 de 201 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4 + 53 da Fase 5 + 30 da Fase 6 + 9 da correção do CSV) |
 | `cd frontend && npm test` | **63 de 63 passaram** (10 anteriores + 27 da Fase 6 + 26 dos ajustes de Top 10 e seção recolhível) |
 | `cd frontend && npm run build` | ✅ concluído |
 | Ponta a ponta com o banco SQLite real (curl), na Fase 2: criar → editar → reiniciar → consultar → excluir | ✅ dados persistiram após reinício; 400 e 404 em JSON conferidos |
@@ -440,7 +440,7 @@ Os itens 4 e 5 foram identificados por **leitura do código**, não por teste au
 | RNF04 | Validação no frontend e no backend | Backend: testado automaticamente; frontend: conveniência (vazios, negativos, tipos), sem teste de componente |
 | RNF05 | Segurança básica | Sem credenciais no repositório; CORS restrito e configurável; SQL parametrizado; erros 5xx sem detalhes internos — testado |
 | RNF06 | Indicadores iguais aos registros reais | Testado contra oráculo independente e contra cópia da base real |
-| RNF07 | Testabilidade: testes das regras e operações críticas | 192 testes de backend e 63 de frontend (utilitários, componentes e interação em jsdom) |
+| RNF07 | Testabilidade: testes das regras e operações críticas | 201 testes de backend e 63 de frontend (utilitários, componentes e interação em jsdom) |
 | RNF08 | Responsividade | CSS responsivo (`@media`); menu hambúrguer na Fase 6; Fase 5 validada pelo usuário, Fase 6 pendente |
 
 ### Diagrama de fluxo (requisição → regra → resposta)
@@ -466,7 +466,7 @@ flowchart TD
 ### Resultados alcançados
 - Aplicação Full Stack funcional (React + Express + SQLite) com CRUD, pesquisa, paginação, classificação de validade (RN01–RN03), filtros por situação e categoria, dashboard com 4 indicadores e valor em risco (RN04).
 - Regras de negócio centralizadas no backend; valores monetários em centavos inteiros do banco à exibição.
-- 192 testes automatizados de backend e 63 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
+- 201 testes automatizados de backend e 63 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
 - Homologação manual pelo usuário das Fases 1 a 5 (informada); Fase 6 pendente.
 - Extras da Fase 6 (CSV, relatório em PDF, estoque baixo), menu hambúrguer, gráficos e tela de Relatórios implementados e testados automaticamente.
 - Fases 1 a 5 sem funcionalidade fora do escopo documental (sem login, vendas, notificações, IA ou app móvel).
@@ -569,7 +569,7 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 - [ ] **Indicadores por categoria:** a seção abre **recolhida**, com botão "Expandir" e seta para baixo; clicar mostra a tabela com **todas** as categorias (inclusive as omitidas do gráfico) e o botão passa a "Ocultar" com seta para cima; clicar de novo recolhe só essa seção (cards, gráficos e botões não mudam); funciona com Tab + Enter/Espaço e o foco é visível; em celular o cabeçalho da seção e o botão cabem na tela.
 - [ ] A **impressão / PDF** mostra a tabela por categoria completa mesmo com a seção recolhida, sem o botão Expandir.
 - [ ] Os números dos cards, dos gráficos da Home, dos gráficos do Relatório e da tabela são **iguais** (some as colunas da tabela e compare com os cards).
-- [ ] **Exportar produtos a vencer (CSV)** baixa `produtos-a-vencer-AAAA-MM-DD.csv`; abrir no Excel/LibreOffice: acentos corretos, colunas separadas, só os produtos a vencer, valores em reais e soma da última coluna igual ao valor em risco.
+- [ ] **Exportar produtos a vencer (CSV)** baixa `produtos-a-vencer-AAAA-MM-DD.csv`; abrir no Excel/LibreOffice: acentos corretos, **7 colunas** (Código, Nome, Categoria, Quantidade, Preço unitário, Data de validade, Valor estimado), **preço `5,99` e valor `149,75` cada um numa única célula** (sem colunas extras vazias ou desalinhadas), só os produtos a vencer e soma da última coluna igual ao valor em risco. *(Correção do CSV aplicada; abertura no Excel ainda não validada pelo usuário.)*
 - [ ] **Imprimir / Salvar como PDF** abre a impressão; na pré-visualização não aparecem menu, cabeçalho nem botões, e os gráficos aparecem com cores; salvar como PDF funciona.
 - [ ] Layout da tela em celular: tabela rola na horizontal dentro da própria caixa (sem rolar a página), gráficos legíveis.
 
@@ -592,7 +592,7 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 | Erro de CORS no navegador | A origem do frontend não está em `CORS_ORIGINS`. |
 | `EADDRINUSE` | Porta 3001 ocupada; defina `PORT`. |
 | Terminal mostra `Migração: backup do banco gravado em …` | Normal na primeira execução após a Fase 6: o banco ganhou a coluna `estoque_minimo` (veja a seção 9). Os backups ficam em `backend/data/backups/` |
-| O CSV abre com acentos errados ou tudo numa coluna só | Abra pelo Excel/LibreOffice como UTF-8 com separador `;` (o arquivo já traz BOM UTF-8) |
+| O CSV abre com acentos errados ou tudo numa coluna só | Abra pelo Excel/LibreOffice como UTF-8 com separador `;` (o arquivo já traz BOM UTF-8). Se ainda assim `5,99` aparecer em duas colunas, no assistente de importação deixe **só** `;` marcado como separador e `"` como delimitador de texto |
 | "Salvar como PDF" sai com a barra lateral ou sem cores | Na janela de impressão ative "Gráficos de segundo plano" / "Background graphics" |
 | `better-sqlite3` não compila/instala | Use Node 20 e `npm install` novamente (baixa binário pré-compilado). |
 
@@ -658,6 +658,6 @@ Roteiro sugerido (≈ 8 min):
 5b. **Filtros e busca:** por categoria, situação, estoque baixo, nome e código, combinados, com paginação.
 6. **Editar e excluir** (com confirmação) e ver os indicadores atualizarem.
 7. **Persistência:** reiniciar o backend e mostrar que os dados continuam.
-8. **Qualidade:** executar `cd backend && npm test` (192 testes) e `cd frontend && npm test` (63 testes); citar a conferência por oráculo independente e a validação por mutação.
+8. **Qualidade:** executar `cd backend && npm test` (201 testes) e `cd frontend && npm test` (63 testes); citar a conferência por oráculo independente e a validação por mutação.
 
 Referência visual: sidebar escura, cabeçalho claro, lista à esquerda e resumo à direita (aproveitando só o layout; vendas, lojas, carrinho e código de barras estão fora de escopo).

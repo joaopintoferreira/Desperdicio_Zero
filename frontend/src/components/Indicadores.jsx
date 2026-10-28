@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { obterIndicadores } from '../services/api'
 import { centavosParaReais } from '../utils/moeda'
 import { formatarData } from '../utils/data'
@@ -12,16 +12,22 @@ export default function Indicadores({ versao = 0 }) {
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(true)
 
+  const ultimaConsulta = useRef(0) // ignora respostas antigas que chegam fora de ordem
+
   const carregar = useCallback(async () => {
+    const consulta = ++ultimaConsulta.current
     setCarregando(true)
     try {
-      setDados(await obterIndicadores())
+      const r = await obterIndicadores()
+      if (consulta !== ultimaConsulta.current) return
+      setDados(r)
       setErro('')
     } catch (err) {
+      if (consulta !== ultimaConsulta.current) return
       setDados(null) // sem valores antigos ou inventados quando a API falha
       setErro(err.message)
     } finally {
-      setCarregando(false)
+      if (consulta === ultimaConsulta.current) setCarregando(false)
     }
   }, [])
 

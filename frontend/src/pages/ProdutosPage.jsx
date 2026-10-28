@@ -34,16 +34,23 @@ export default function ProdutosPage() {
     return () => clearTimeout(t)
   }, [entrada])
 
+  // Só a resposta da consulta mais recente é usada: digitar rápido na busca não deixa
+  // uma resposta antiga (que chegou depois) sobrescrever a atual.
+  const ultimaConsulta = useRef(0)
+
   const carregar = useCallback(async () => {
+    const consulta = ++ultimaConsulta.current
     setCarregando(true)
     setErro('')
     try {
-      setResultado(await listarProdutos({ busca, categoria, situacao, pagina, limite: POR_PAGINA }))
+      const r = await listarProdutos({ busca, categoria, situacao, pagina, limite: POR_PAGINA })
+      if (consulta === ultimaConsulta.current) setResultado(r)
     } catch (err) {
+      if (consulta !== ultimaConsulta.current) return
       setResultado(null)
       setErro(err.message)
     } finally {
-      setCarregando(false)
+      if (consulta === ultimaConsulta.current) setCarregando(false)
     }
   }, [busca, categoria, situacao, pagina])
 

@@ -15,7 +15,8 @@ export function centavosParaCampo(centavos) {
 
 // "12,50" | "12.50" | "1.234,56" | "R$ 5" -> centavos inteiros; null se inválido.
 export function reaisParaCentavos(texto) {
-  let t = String(texto).replace(/R\$|\s/g, '')
+  // Espaços só nas pontas e após "R$": um espaço no meio ("5 99") é erro de digitação, não "599".
+  let t = String(texto).trim().replace(/^R\$\s*/, '')
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.')
   const m = /^(\d+)(?:\.(\d{1,2}))?$/.exec(t)
   if (!m) return null

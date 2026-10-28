@@ -187,3 +187,10 @@ select:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 .indicador--proximo { border-left-color: var(--cor-proximo); }
 .indicador--valor { border-left-color: var(--cor-texto); }
 .indicadores__data { margin: 10px 0 0; font-size: 0.78rem; color: var(--cor-texto-suave); }
+
+/* ---- Fase 5: refinamentos de interface (textos longos e telas baixas) ---- */
+/* Nomes, códigos e categorias longos (até 120 caracteres, sem espaços) não podem estourar o layout. */
+.produto__info strong, .produto__meta, .modal p, .msg { overflow-wrap: anywhere; }
+.barra, .paginacao { flex-wrap: wrap; }
+/* Diálogo em telas baixas (ex.: celular deitado): rola dentro dele em vez de cortar o formulário. */
+.modal { max-height: calc(100vh - 32px); overflow-y: auto; }

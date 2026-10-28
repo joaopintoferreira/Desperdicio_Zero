@@ -1,86 +1,155 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { atualizarProduto, criarProduto, excluirProduto, listarCategorias, listarProdutos } from '../services/api'
 import { ROTULOS_SITUACAO } from '../components/SeloSituacao'
-import IndicadoresAutonomo from '../components/IndicadoresAutonomo'
+import Indicadores from '../components/Indicadores'
 import ProdutoCard from '../components/ProdutoCard'
 import ProdutoForm from '../components/ProdutoForm'
 import ConfirmarExclusao from '../components/ConfirmarExclusao'
 import { IconeBusca } from '../components/Icones'
+import useIndicadores from '../hooks/useIndicadores'
+import { criarControleDeConsulta } from '../utils/consulta'
 
 const POR_PAGINA = 10
 
 export default function ProdutosPage() {
-  const [entrada, setEntrada] = useState('')
-  const [busca, setBusca] = useState('')
+  const [entrada, setEntrada] = useState('') // o que está escrito no campo (valor visível)
+  const [busca, setBusca] = useState('') // texto já aplicado à consulta (após o atraso de 300 ms)
   const [situacao, setSituacao] = useState('')
   const [categoria, setCategoria] = useState('')
   const [estoque, setEstoque] = useState('')
   const [categorias, setCategorias] = useState([])
   const [erroCategorias, setErroCategorias] = useState('')
+  const [carregandoCategorias, setCarregandoCategorias] = useState(false)
   const [pagina, setPagina] = useState(1)
-  const [versaoIndicadores, setVersaoIndicadores] = useState(0) // muda a cada alteração, para recarregar os indicadores
+  const [versaoLista, setVersaoLista] = useState(0) // muda para forçar nova consulta com os mesmos filtros
   const [resultado, setResultado] = useState(null) // { dados, paginacao }
   const [carregando, setCarregando] = useState(true)
+  const [atualizando, setAtualizando] = useState(false) // operação do botão "Atualizar" em andamento
   const [erro, setErro] = useState('')
   const [mensagem, setMensagem] = useState('')
+  const [aviso, setAviso] = useState('')
   const [formulario, setFormulario] = useState(null) // null | { produto? }
   const [excluindo, setExcluindo] = useState(null)
+  const indicadores = useIndicadores() // indicadores do estoque inteiro (não dependem dos filtros)
 
-  // Espera o usuário parar de digitar antes de consultar a API.
+  const buscaAplicada = useRef(busca)
+  buscaAplicada.current = busca
+  const temporizador = useRef(null)
+
+  // Pesquisa automática: espera o usuário parar de digitar (300 ms) antes de consultar a API.
+  // Só reinicia a página quando o texto realmente mudou.
   useEffect(() => {
-    const t = setTimeout(() => {
-      setBusca(entrada.trim())
-      setPagina(1)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [entrada])
-
-  // Só a resposta da consulta mais recente é usada: digitar rápido na busca não deixa
-  // uma resposta antiga (que chegou depois) sobrescrever a atual.
-  const ultimaConsulta = useRef(0)
-
-  const carregar = useCallback(async () => {
-    const consulta = ++ultimaConsulta.current
-    setCarregando(true)
-    setErro('')
-    try {
-      const r = await listarProdutos({ busca, categoria, situacao, estoque, pagina, limite: POR_PAGINA })
-      if (consulta === ultimaConsulta.current) setResultado(r)
-    } catch (err) {
-      if (consulta !== ultimaConsulta.current) return
-      setResultado(null)
-      setErro(err.message)
-    } finally {
-      if (consulta === ultimaConsulta.current) setCarregando(false)
-    }
-  }, [busca, categoria, situacao, estoque, pagina])
-
-  useEffect(() => { carregar() }, [carregar])
-
-  // Categorias vêm da API (nunca de uma lista fixa). Recarrega após salvar/excluir,
-  // pois categorias podem surgir ou desaparecer; se a escolhida sumiu, limpa o filtro.
-  const categoriaAtual = useRef(categoria)
-  categoriaAtual.current = categoria
-
-  const carregarCategorias = useCallback(async () => {
-    try {
-      const { dados } = await listarCategorias()
-      setCategorias(dados)
-      setErroCategorias('')
-      if (categoriaAtual.current && !dados.includes(categoriaAtual.current)) {
-        setCategoria('')
+    temporizador.current = setTimeout(() => {
+      const nova = entrada.trim()
+      if (nova !== buscaAplicada.current) {
+        setBusca(nova)
         setPagina(1)
       }
+    }, 300)
+    return () => clearTimeout(temporizador.current)
+  }, [entrada])
+
+  // Só a resposta da consulta mais recente é usada: digitar rápido, filtrar ou clicar em Atualizar
+  // não deixa uma resposta antiga (que chegou depois) sobrescrever a atual.
+  const controleLista = useRef(criarControleDeConsulta())
+
+  const consultar = useCallback(async (filtros) => {
+    const id = controleLista.current.iniciar()
+    setCarregando(true)
+    setErro('')
+    let corrigindoPagina = false
+    try {
+      const r = await listarProdutos({ ...filtros, limite: POR_PAGINA })
+      if (!controleLista.current.atual(id)) return
+      const p = r.paginacao
+      if (p.totalPaginas >= 1 && p.pagina > p.totalPaginas) {
+        // A página pedida deixou de existir (ex.: produtos excluídos por fora): vai para a última
+        // página válida, mantendo busca e filtros. O efeito abaixo refaz a consulta.
+        corrigindoPagina = true
+        setPagina(p.totalPaginas)
+        return
+      }
+      setResultado(r)
     } catch (err) {
-      setCategorias([])
-      setErroCategorias(`Não foi possível carregar as categorias. ${err.message}`)
+      if (!controleLista.current.atual(id)) return
+      setResultado(null) // sem dados antigos apresentados como atuais quando a consulta falha
+      setErro(err.message)
+    } finally {
+      if (controleLista.current.atual(id) && !corrigindoPagina) setCarregando(false)
+    }
+  }, [])
+
+  // Único caminho para consultar a lista: muda busca, filtro, página ou versaoLista => uma consulta.
+  useEffect(() => {
+    consultar({ busca, categoria, situacao, estoque, pagina })
+  }, [consultar, busca, categoria, situacao, estoque, pagina, versaoLista])
+
+  // Categorias vêm da API (nunca de uma lista fixa). Recarregam ao atualizar, salvar e excluir.
+  const categoriaAtual = useRef(categoria)
+  categoriaAtual.current = categoria
+  const categoriasAtuais = useRef(categorias)
+  categoriasAtuais.current = categorias
+  const controleCategorias = useRef(criarControleDeConsulta())
+
+  const carregarCategorias = useCallback(async () => {
+    const id = controleCategorias.current.iniciar()
+    setCarregandoCategorias(true)
+    try {
+      const { dados } = await listarCategorias()
+      if (!controleCategorias.current.atual(id)) return
+      setCategorias(dados)
+      setErroCategorias('')
+      const selecionada = categoriaAtual.current
+      if (selecionada && !dados.includes(selecionada)) {
+        // A categoria escolhida deixou de existir: remove só esse filtro e avisa.
+        setCategoria('')
+        setPagina(1)
+        setAviso(`A categoria “${selecionada}” não existe mais; o filtro de categoria foi removido.`)
+      }
+    } catch (err) {
+      if (!controleCategorias.current.atual(id)) return
+      // Mantém as opções que já estavam na tela (não apaga em silêncio) e explica o que houve.
+      setErroCategorias(
+        categoriasAtuais.current.length > 0
+          ? `Não foi possível atualizar as categorias; exibindo as últimas carregadas. ${err.message}`
+          : `Não foi possível carregar as categorias. ${err.message}`,
+      )
+    } finally {
+      if (controleCategorias.current.atual(id)) setCarregandoCategorias(false)
     }
   }, [])
 
   useEffect(() => { carregarCategorias() }, [carregarCategorias])
 
+  // Botão "Atualizar": recarrega lista, indicadores e categorias em paralelo, mantendo busca, filtros e
+  // página. Usa o texto visível no campo (não o valor atrasado) e cancela o atraso pendente, para não
+  // haver segunda consulta nem reinício da página. A lista é consultada pelo mesmo efeito de sempre.
+  function atualizar() {
+    if (atualizando) return // evita cliques repetidos durante a operação
+    clearTimeout(temporizador.current)
+    setAtualizando(true)
+    setAviso('')
+    setMensagem('')
+    const visivel = entrada.trim()
+    if (visivel !== busca) { // pesquisa digitada há menos de 300 ms: é uma pesquisa nova
+      setBusca(visivel)
+      setPagina(1)
+    }
+    setVersaoLista((v) => v + 1)
+    setCarregando(true)
+    indicadores.recarregar()
+    carregarCategorias()
+  }
+
+  // Termina a operação do botão quando as três consultas acabaram.
+  useEffect(() => {
+    if (!atualizando || carregando || indicadores.carregando || carregandoCategorias) return
+    setAtualizando(false)
+    if (!erro && !indicadores.erro && !erroCategorias) setMensagem('Dados atualizados.')
+  }, [atualizando, carregando, indicadores.carregando, carregandoCategorias, erro, indicadores.erro, erroCategorias])
+
   const alterarSituacao = (valor) => { setSituacao(valor); setPagina(1) }
-  const alterarCategoria = (valor) => { setCategoria(valor); setPagina(1) }
+  const alterarCategoria = (valor) => { setCategoria(valor); setPagina(1); setAviso('') }
   const alterarEstoque = (valor) => { setEstoque(valor); setPagina(1) }
   const filtrando = Boolean(busca || categoria || situacao || estoque)
 
@@ -93,19 +162,18 @@ export default function ProdutosPage() {
       setMensagem('Produto cadastrado com sucesso.')
     }
     setFormulario(null)
-    setVersaoIndicadores((v) => v + 1)
-    await Promise.all([carregar(), carregarCategorias()])
+    indicadores.recarregar()
+    setVersaoLista((v) => v + 1)
+    carregarCategorias()
   }
 
   async function confirmarExclusao() {
     await excluirProduto(excluindo.id)
     setExcluindo(null)
     setMensagem('Produto excluído com sucesso.')
-    setVersaoIndicadores((v) => v + 1)
-    // Se a página ficou vazia após excluir o último item, volta uma página.
-    if (resultado.dados.length === 1 && pagina > 1) setPagina(pagina - 1)
-    else await carregar()
-    await carregarCategorias()
+    indicadores.recarregar()
+    setVersaoLista((v) => v + 1) // se a página ficar vazia, consultar() volta para a última válida
+    carregarCategorias()
   }
 
   const dados = resultado?.dados ?? []
@@ -131,13 +199,16 @@ export default function ProdutosPage() {
             value={entrada}
             onChange={(e) => setEntrada(e.target.value)}
           />
+          {/* aria-disabled (e não disabled) mantém o foco do teclado no botão durante a atualização. */}
           <button
             type="button"
-            className="btn"
-            onClick={() => { carregar(); setVersaoIndicadores((v) => v + 1) }}
-            disabled={carregando}
+            className="btn btn--atualizar"
+            onClick={atualizar}
+            aria-disabled={atualizando}
+            aria-busy={atualizando}
           >
-            Atualizar
+            {atualizando && <span className="spinner" aria-hidden="true" />}
+            <span>{atualizando ? 'Atualizando…' : 'Atualizar'}</span>
           </button>
         </div>
 
@@ -175,8 +246,10 @@ export default function ProdutosPage() {
 
         <div aria-live="polite">
           {mensagem && <p className="msg msg--ok">{mensagem}</p>}
+          {aviso && <p className="msg msg--aviso">{aviso}</p>}
+          <span className="sr-only">{atualizando ? 'Atualizando dados…' : ''}</span>
         </div>
-        {erro && <p role="alert" className="msg msg--erro">{erro}</p>}
+        {erro && <p role="alert" className="msg msg--erro">{erro} Use “Atualizar” para tentar novamente.</p>}
         {carregando && !resultado && <p className="vazio">Carregando produtos…</p>}
 
         {!erro && resultado && dados.length === 0 && (
@@ -210,7 +283,7 @@ export default function ProdutosPage() {
       {/* Resumo do estoque: os mesmos indicadores da Home, sempre do estoque inteiro (não dos filtros). */}
       <aside className="painel" aria-labelledby="titulo-resumo">
         <h2 id="titulo-resumo">Resumo do estoque</h2>
-        <IndicadoresAutonomo versao={versaoIndicadores} />
+        <Indicadores estado={indicadores} />
       </aside>
 
       {formulario && (

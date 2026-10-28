@@ -256,7 +256,7 @@ cd frontend && npm run dev      # UI em http://localhost:5173
 ```
 ```bash
 cd backend  && npm test         # 201 testes (API, validade, filtros, indicadores, fronteiras, fluxos, relatórios, estoque, migração)
-cd frontend && npm test         # 63 testes (moeda/data, menu, gráficos, Top 10, consultas assíncronas, componentes e interação com jsdom)
+cd frontend && npm test         # 80 testes (moeda/data, menu, gráficos, Top 10, consultas assíncronas, componentes e interação com jsdom)
 cd frontend && npm run build    # build de produção em frontend/dist
 ```
 
@@ -273,7 +273,7 @@ cd frontend && npm run build    # build de produção em frontend/dist
 | Comando | Resultado |
 |---|---|
 | `cd backend && npm test` | **201 de 201 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4 + 53 da Fase 5 + 30 da Fase 6 + 9 da correção do CSV) |
-| `cd frontend && npm test` | **63 de 63 passaram** (10 anteriores + 27 da Fase 6 + 26 dos ajustes de Top 10 e seção recolhível) |
+| `cd frontend && npm test` | **80 de 80 passaram** (10 anteriores + 27 da Fase 6 + 26 de Top 10 e seção recolhível + 17 do botão Atualizar) |
 | `cd frontend && npm run build` | ✅ concluído |
 | Ponta a ponta com o banco SQLite real (curl), na Fase 2: criar → editar → reiniciar → consultar → excluir | ✅ dados persistiram após reinício; 400 e 404 em JSON conferidos |
 | Fase 3 com o **relógio real**, banco temporário (curl): produtos com validade ontem, hoje, +7 e +8 dias em São Paulo | ✅ `vencido`, `proximo`, `proximo`, `dentro`; filtros e `/categorias` coerentes |
@@ -339,7 +339,7 @@ Testes do backend usam banco `:memory:` ou arquivo temporário, nunca `backend/d
 
 ## 20. Uso da interface
 
-**Menu:** Home, Produtos e Relatórios. Em telas pequenas (≤ 800 px) o menu vira uma gaveta aberta pelo botão hambúrguer no cabeçalho. **Home:** dashboard com os 4 cards (Total de produtos, Produtos vencidos, A vencer em 7 dias, Valor estimado em risco) e a data de referência, seguidos de dois gráficos (rosca por situação e barras do valor em risco por categoria) e do aviso de estoque baixo; os valores vêm da API e são recarregados ao abrir a página. **Relatórios:** relatório do estado atual do estoque, com tabela por categoria, exportação CSV e impressão/PDF. **Produtos:** lista à esquerda com busca (por nome ou código, com atraso de 300 ms), seletores **Situação** (Todas, Vencido, A vencer, Dentro da validade) e **Categoria** (Todas + as categorias reais cadastradas, carregadas da API), botão **Atualizar**, **Novo produto**, **Editar** e **Excluir** (pede confirmação) em cada item; paginação de 10 em 10. Cada produto mostra um selo com a situação (texto + cor). Mudar busca ou filtro volta à página 1; os filtros são enviados ao backend, não aplicados no navegador. À direita, o painel **Resumo do estoque** mostra os mesmos 4 indicadores, atualizados após cadastrar, editar, excluir ou clicar em **Atualizar** (sempre do estoque inteiro, não dos filtros); se a API falhar, aparece a mensagem de erro e **Tentar novamente**, sem valores inventados. Preços aparecem como `R$ X,XX`. Diálogos fecham com Esc.
+**Menu:** Home, Produtos e Relatórios. Em telas pequenas (≤ 800 px) o menu vira uma gaveta aberta pelo botão hambúrguer no cabeçalho. **Home:** dashboard com os 4 cards (Total de produtos, Produtos vencidos, A vencer em 7 dias, Valor estimado em risco) e a data de referência, seguidos de dois gráficos (rosca por situação e barras do valor em risco por categoria) e do aviso de estoque baixo; os valores vêm da API e são recarregados ao abrir a página. **Relatórios:** relatório do estado atual do estoque, com tabela por categoria, exportação CSV e impressão/PDF. **Produtos:** lista à esquerda com busca (por nome ou código, com atraso de 300 ms), seletores **Situação** (Todas, Vencido, A vencer, Dentro da validade) e **Categoria** (Todas + as categorias reais cadastradas, carregadas da API), botão **Atualizar** (veja abaixo), **Novo produto**, **Editar** e **Excluir** (pede confirmação) em cada item; paginação de 10 em 10. Cada produto mostra um selo com a situação (texto + cor). **Atualizar** recarrega, a partir do backend, a lista, os indicadores do estoque inteiro e as categorias do filtro, **sem apagar o que você digitou nem os filtros**: usa o texto que está no campo naquele instante (mesmo antes dos 300 ms da pesquisa automática; um texto novo reinicia a página, como numa pesquisa nova) e preserva a página atual, ou vai para a última página que ainda existe. Enquanto roda, o botão mostra um indicador e "Atualizando…", mantém o foco e ignora novos cliques; a página não é bloqueada. Se a categoria selecionada foi removida por fora, só esse filtro sai e aparece um aviso; se a consulta de categorias falhar, as opções que já estavam na tela são mantidas; se a lista ou os indicadores falharem, aparece a mensagem de erro (sem números antigos) e o botão serve para tentar de novo. Mudar busca ou filtro volta à página 1; os filtros são enviados ao backend, não aplicados no navegador. À direita, o painel **Resumo do estoque** mostra os mesmos 4 indicadores, atualizados após cadastrar, editar, excluir ou clicar em **Atualizar** (sempre do estoque inteiro, não dos filtros); se a API falhar, aparece a mensagem de erro e **Tentar novamente**, sem valores inventados. Preços aparecem como `R$ X,XX`. Diálogos fecham com Esc.
 
 ### Lista de verificação manual da Fase 3 (executada pelo usuário)
 
@@ -440,7 +440,7 @@ Os itens 4 e 5 foram identificados por **leitura do código**, não por teste au
 | RNF04 | Validação no frontend e no backend | Backend: testado automaticamente; frontend: conveniência (vazios, negativos, tipos), sem teste de componente |
 | RNF05 | Segurança básica | Sem credenciais no repositório; CORS restrito e configurável; SQL parametrizado; erros 5xx sem detalhes internos — testado |
 | RNF06 | Indicadores iguais aos registros reais | Testado contra oráculo independente e contra cópia da base real |
-| RNF07 | Testabilidade: testes das regras e operações críticas | 201 testes de backend e 63 de frontend (utilitários, componentes e interação em jsdom) |
+| RNF07 | Testabilidade: testes das regras e operações críticas | 201 testes de backend e 80 de frontend (utilitários, componentes e interação em jsdom) |
 | RNF08 | Responsividade | CSS responsivo (`@media`); menu hambúrguer na Fase 6; Fase 5 validada pelo usuário, Fase 6 pendente |
 
 ### Diagrama de fluxo (requisição → regra → resposta)
@@ -466,7 +466,7 @@ flowchart TD
 ### Resultados alcançados
 - Aplicação Full Stack funcional (React + Express + SQLite) com CRUD, pesquisa, paginação, classificação de validade (RN01–RN03), filtros por situação e categoria, dashboard com 4 indicadores e valor em risco (RN04).
 - Regras de negócio centralizadas no backend; valores monetários em centavos inteiros do banco à exibição.
-- 201 testes automatizados de backend e 63 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
+- 201 testes automatizados de backend e 80 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
 - Homologação manual pelo usuário das Fases 1 a 5 (informada); Fase 6 pendente.
 - Extras da Fase 6 (CSV, relatório em PDF, estoque baixo), menu hambúrguer, gráficos e tela de Relatórios implementados e testados automaticamente.
 - Fases 1 a 5 sem funcionalidade fora do escopo documental (sem login, vendas, notificações, IA ou app móvel).
@@ -579,6 +579,15 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 - [ ] Editar a quantidade liga e desliga o selo; o filtro **Estoque → Estoque baixo** lista só esses produtos e combina com busca, categoria e situação.
 - [ ] O aviso "N produtos estão com estoque baixo" aparece na Home e no Relatório e some quando não há nenhum.
 
+**E2. Botão "Atualizar" da página Produtos**
+- [ ] Digite um código ou nome e clique em **Atualizar** imediatamente (sem esperar): a lista mostra o resultado do texto digitado, uma única vez, sem a lista "piscar" duas vezes.
+- [ ] Com busca, filtros e página 2 ou mais ativos, clique em **Atualizar**: nada do que você escolheu é apagado e continua na mesma página.
+- [ ] Altere um produto direto no banco (use um banco de teste) e clique em **Atualizar**: lista e cards de **Resumo do estoque** mostram os valores novos.
+- [ ] Crie uma categoria nova por fora e clique em **Atualizar**: ela aparece no seletor. Remova por fora a categoria que está selecionada: o filtro de categoria sai e aparece o aviso, com os outros filtros mantidos.
+- [ ] Exclua por fora produtos até a página atual deixar de existir: **Atualizar** leva à última página existente, sem mensagem de "nenhum produto" indevida.
+- [ ] Durante a atualização o botão mostra o indicador e "Atualizando…", não aceita novos cliques e continua com o foco do teclado (Tab/Enter/Espaço); os campos de busca e filtros continuam utilizáveis.
+- [ ] Com o backend parado: lista e indicadores mostram erro (sem números antigos); ao religar, **Atualizar** volta ao normal.
+
 **F. Regressão**
 - [ ] CRUD, busca, filtros, selos de validade, paginação, valores `R$ X,XX` e os 4 cards continuam funcionando; o layout desktop continua igual ao homologado.
 
@@ -658,6 +667,6 @@ Roteiro sugerido (≈ 8 min):
 5b. **Filtros e busca:** por categoria, situação, estoque baixo, nome e código, combinados, com paginação.
 6. **Editar e excluir** (com confirmação) e ver os indicadores atualizarem.
 7. **Persistência:** reiniciar o backend e mostrar que os dados continuam.
-8. **Qualidade:** executar `cd backend && npm test` (201 testes) e `cd frontend && npm test` (63 testes); citar a conferência por oráculo independente e a validação por mutação.
+8. **Qualidade:** executar `cd backend && npm test` (201 testes) e `cd frontend && npm test` (80 testes); citar a conferência por oráculo independente e a validação por mutação.
 
 Referência visual: sidebar escura, cabeçalho claro, lista à esquerda e resumo à direita (aproveitando só o layout; vendas, lojas, carrinho e código de barras estão fora de escopo).

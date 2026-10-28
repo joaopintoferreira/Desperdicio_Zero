@@ -2,6 +2,7 @@
 const { ErroApp } = require('../erros');
 const { validarProduto } = require('../validators/produto');
 const { SITUACOES, classificar, intervaloSituacao } = require('./validadeService');
+const { estoqueBaixo } = require('./estoqueService');
 
 const LIMITE_PADRAO = 20;
 const LIMITE_MAXIMO = 100;
@@ -61,15 +62,30 @@ function lerSituacao(valor) {
   return situacao;
 }
 
+function lerEstoque(valor) {
+  const estoque = textoOpcional(valor, 'estoque');
+  if (estoque === '') return undefined; // vazio = sem filtro
+  if (estoque !== 'baixo') {
+    throw new ErroApp(400, 'Parâmetros inválidos', { estoque: 'estoque deve ser: baixo' });
+  }
+  return estoque;
+}
+
 // `hoje` é uma função que devolve a data atual 'YYYY-MM-DD' (injetável nos testes).
 function criarProdutoService(model, { hoje }) {
-  const comSituacao = (produto, dataRef) => ({ ...produto, situacao: classificar(produto.data_validade, dataRef) });
+  // Acrescenta os campos calculados pelo backend: situação de validade e alerta de estoque baixo.
+  const comSituacao = (produto, dataRef) => ({
+    ...produto,
+    situacao: classificar(produto.data_validade, dataRef),
+    estoque_baixo: estoqueBaixo(produto.quantidade, produto.estoque_minimo),
+  });
 
   return {
-    listar({ busca, categoria, situacao, pagina, limite }) {
+    listar({ busca, categoria, situacao, estoque, pagina, limite }) {
       const termo = textoOpcional(busca, 'busca');
       const categoriaTxt = textoOpcional(categoria, 'categoria'); // vazio = sem filtro
       const situacaoSel = lerSituacao(situacao);
+      const estoqueSel = lerEstoque(estoque);
       const paginaN = inteiroPositivo(pagina, 'pagina', 1, PAGINA_MAXIMA);
       const limiteN = inteiroPositivo(limite, 'limite', LIMITE_PADRAO, LIMITE_MAXIMO);
 
@@ -78,6 +94,7 @@ function criarProdutoService(model, { hoje }) {
       const filtros = {
         busca: termo,
         categoria: categoriaTxt,
+        estoqueBaixo: estoqueSel === 'baixo',
         intervalo: situacaoSel ? intervaloSituacao(situacaoSel, dataRef) : undefined,
       };
       const total = model.contar(filtros);
@@ -102,6 +119,7 @@ function criarProdutoService(model, { hoje }) {
 
     criar(corpo) {
       const valores = exigirValido(corpo);
+      valores.estoque_minimo ??= 0; // ausente = sem alerta
       try {
         return comSituacao(model.buscarPorId(model.inserir(valores)), hoje());
       } catch (err) {
@@ -113,6 +131,12 @@ function criarProdutoService(model, { hoje }) {
       const id = parseId(idTexto);
       const valores = exigirValido(corpo);
       try {
+        // Campo ausente no PUT preserva o limite mínimo já configurado (clientes antigos não o apagam).
+        if (valores.estoque_minimo === undefined) {
+          const atual = model.buscarPorId(id);
+          if (!atual) throw new ErroApp(404, 'Produto não encontrado');
+          valores.estoque_minimo = atual.estoque_minimo;
+        }
         if (!model.atualizar(id, valores)) throw new ErroApp(404, 'Produto não encontrado');
       } catch (err) {
         throw traduzirErroBanco(err);

@@ -51,7 +51,7 @@ describe('criação (RF01)', () => {
     assert.equal(r.status, 201);
     assert.equal(r.corpo.id, 1);
     // 2026-11-15 está a 5 dias de HOJE_FIXO (2026-11-10): "proximo"
-    assert.deepEqual({ ...r.corpo, id: undefined }, { ...produtoValido(), id: undefined, situacao: 'proximo' });
+    assert.deepEqual({ ...r.corpo, id: undefined }, { ...produtoValido(), id: undefined, situacao: 'proximo', estoque_minimo: 0, estoque_baixo: false });
     assert.equal(api.contar(), 1);
   });
 

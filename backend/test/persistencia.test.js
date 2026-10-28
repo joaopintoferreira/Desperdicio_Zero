@@ -12,7 +12,7 @@ test('dados persistem após fechar e reabrir o arquivo do banco', () => {
   const arquivo = path.join(dir, 'teste.db');
   try {
     const db1 = criarConexao(arquivo);
-    const id = criarProdutoModel(db1).inserir(produtoValido());
+    const id = criarProdutoModel(db1).inserir({ ...produtoValido(), estoque_minimo: 0 });
     db1.close();
 
     const db2 = criarConexao(arquivo); // reabrir não apaga nem recria dados

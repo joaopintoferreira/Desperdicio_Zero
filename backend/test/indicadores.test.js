@@ -20,8 +20,8 @@ const indicadores = async () => {
 describe('GET /api/indicadores — contrato', () => {
   test('sem produtos: tudo zero, sem erro (PDF cenário 16)', async () => {
     assert.deepEqual(await indicadores(), {
-      total_produtos: 0, produtos_vencidos: 0, produtos_a_vencer: 0, valor_em_risco: 0,
-      janela_alerta_dias: 7, data_referencia: HOJE_FIXO,
+      total_produtos: 0, produtos_vencidos: 0, produtos_a_vencer: 0, produtos_dentro: 0, valor_em_risco: 0,
+      produtos_estoque_baixo: 0, por_categoria: [], janela_alerta_dias: 7, data_referencia: HOJE_FIXO,
     });
   });
 

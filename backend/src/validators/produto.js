@@ -59,6 +59,13 @@ function validarProduto(corpo) {
     b.preco_unitario, 'preco_unitario', 'Preço unitário (em centavos)', LIMITES.precoMaxCentavos, erros,
   );
 
+  // Estoque mínimo (alerta de estoque baixo, Fase 6): opcional; ausente = não informado.
+  let estoque_minimo;
+  if (b.estoque_minimo !== undefined) {
+    if (b.estoque_minimo === null) erros.estoque_minimo = 'Estoque mínimo deve ser um número inteiro (use 0 para sem alerta)';
+    else estoque_minimo = validarInteiro(b.estoque_minimo, 'estoque_minimo', 'Estoque mínimo', LIMITES.quantidadeMax, erros);
+  }
+
   let data_validade;
   if (typeof b.data_validade !== 'string' || b.data_validade === '') {
     erros.data_validade = 'Data de validade é obrigatória';
@@ -70,7 +77,7 @@ function validarProduto(corpo) {
 
   return {
     erros,
-    valores: { nome, codigo, categoria, quantidade, preco_unitario, data_validade },
+    valores: { nome, codigo, categoria, quantidade, preco_unitario, data_validade, estoque_minimo },
   };
 }
 

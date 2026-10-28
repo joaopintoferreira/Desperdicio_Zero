@@ -8,7 +8,10 @@ CREATE TABLE IF NOT EXISTS produtos (
   categoria      TEXT    NOT NULL,
   quantidade     INTEGER NOT NULL CHECK (quantidade >= 0),
   preco_unitario INTEGER NOT NULL CHECK (preco_unitario >= 0),
-  data_validade  TEXT    NOT NULL
+  data_validade  TEXT    NOT NULL,
+  -- Limite mínimo para o alerta de estoque baixo (Fase 6). 0 = sem alerta.
+  -- Bancos criados antes da Fase 6 recebem esta coluna por migração aditiva (db/connection.js).
+  estoque_minimo INTEGER NOT NULL DEFAULT 0 CHECK (estoque_minimo >= 0)
 );
 
 CREATE INDEX IF NOT EXISTS idx_produtos_data_validade ON produtos (data_validade);

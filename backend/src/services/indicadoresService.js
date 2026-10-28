@@ -19,16 +19,35 @@ function centavosSeguros(valor) {
 function criarIndicadoresService(model, { hoje }) {
   return {
     obter() {
-      const dataRef = hoje(); // lida uma vez: os quatro números usam a mesma data
+      const dataRef = hoje(); // lida uma vez: todos os números usam a mesma data
+      const intervalos = {
+        vencido: intervaloSituacao('vencido', dataRef),
+        proximo: intervaloSituacao('proximo', dataRef),
+        dentro: intervaloSituacao('dentro', dataRef),
+      };
       const todos = model.agregar({});
-      const vencidos = model.agregar({ intervalo: intervaloSituacao('vencido', dataRef) });
-      const aVencer = model.agregar({ intervalo: intervaloSituacao('proximo', dataRef) });
+      const vencidos = model.agregar({ intervalo: intervalos.vencido });
+      const aVencer = model.agregar({ intervalo: intervalos.proximo });
+      const dentro = model.agregar({ intervalo: intervalos.dentro });
+      const estoqueBaixo = model.agregar({ estoqueBaixo: true });
 
       return {
         total_produtos: todos.produtos, // produtos diferentes cadastrados
         produtos_vencidos: vencidos.produtos,
         produtos_a_vencer: aVencer.produtos,
+        produtos_dentro: dentro.produtos,
         valor_em_risco: centavosSeguros(aVencer.valorCentavos), // centavos inteiros
+        produtos_estoque_baixo: estoqueBaixo.produtos, // alerta da Fase 6
+        // Mesmos indicadores por categoria (para gráficos e relatório); a soma das categorias
+        // é igual ao total geral. Ordem: maior valor em risco primeiro, depois nome.
+        por_categoria: model.agregarPorCategoria(intervalos).map((c) => ({
+          categoria: c.categoria,
+          total_produtos: c.produtos,
+          produtos_vencidos: c.vencidos,
+          produtos_a_vencer: c.aVencer,
+          produtos_dentro: c.dentro,
+          valor_em_risco: centavosSeguros(c.valorCentavos),
+        })),
         janela_alerta_dias: JANELA_ALERTA_DIAS,
         data_referencia: dataRef,
       };

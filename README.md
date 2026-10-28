@@ -2,7 +2,7 @@
 
 Aplicação web Full Stack para **controle de estoque e de validade de produtos**, voltada a pequenos mercados, mercearias e minimercados. Projeto acadêmico.
 
-> **Estado atual: Fases 1 a 5 homologadas manualmente pelo usuário (informado). Fase 6 (extras opcionais: CSV, relatório em PDF por impressão e alerta de estoque baixo) e as melhorias de menu responsivo, gráficos e tela de relatórios estão implementadas e verificadas por testes automatizados — a validação manual da Fase 6 está PENDENTE do usuário.** A Fase 7 não existe nos documentos e não foi iniciada.
+> **Estado atual: Fases 1 a 5 homologadas manualmente pelo usuário (informado). Fase 6 (extras opcionais: CSV, relatório em PDF por impressão e alerta de estoque baixo) e as melhorias de menu responsivo, gráficos e tela de relatórios estão implementadas e verificadas por testes automatizados — na validação manual da Fase 6, o usuário já validou o botão Atualizar (E2) e confirmou a exportação CSV corrigida e funcionando; os demais itens continuam PENDENTES.** A Fase 7 não existe nos documentos e não foi iniciada.
 
 ## Homologação da Fase 2
 
@@ -323,7 +323,7 @@ Testes do backend usam banco `:memory:` ou arquivo temporário, nunca `backend/d
 | Fase 5 — indicadores correspondem à base (PDF §11, RNF06) | `indicadoresService`, `validadeService` | `consistencia.test.js` (oráculo independente) + cópia da base real | ✅ testado/verificado |
 | Fase 5 — responsividade e mensagens (claude.md §7, RNF08) | `index.css`, `ProdutosPage`, `Indicadores` | — (sem teste de interface) | ⏳ validação manual pendente |
 | Fase 5 — documentação e apresentação (PDF §16, claude.md §10) | este README (seções 1–24, Fase 5) | — | ✅ escrito · conferência pelo usuário pendente |
-| Fase 6 — PDF §6.5: exportar produtos a vencer em CSV | `relatorioService`, `csvService`, `GET /relatorios/produtos-a-vencer.csv`, botão em Relatórios | `relatorios.test.js` (janela, ordem, valores, BOM, fórmulas, vazio) | ✅ testado (API) · download no navegador: validação manual pendente |
+| Fase 6 — PDF §6.5: exportar produtos a vencer em CSV | `relatorioService`, `csvService`, `GET /relatorios/produtos-a-vencer.csv`, botão em Relatórios | `relatorios.test.js` (janela, ordem, valores, BOM, fórmulas, vazio) | ✅ testado (API) · exportação confirmada pelo usuário como corrigida e funcionando · abertura no Excel/LibreOffice: não confirmada explicitamente |
 | Fase 6 — PDF §6.5: relatório em PDF | `RelatoriosPage` + CSS `@media print` (Imprimir / Salvar como PDF) | — (depende do navegador) | ⏳ validação manual pendente |
 | Fase 6 — PDF §6.5: alerta de estoque baixo por limite mínimo | coluna `estoque_minimo`, `estoqueService`, `?estoque=baixo`, selo, aviso | `estoque.test.js` (regra, validação, PUT, filtro, SQL × JS) | ✅ testado (API e renderização) · UI: validação manual pendente |
 | Fase 6 — migração aditiva com backup (decisão do usuário) | `db/connection.js` (`migrarEstoqueMinimo`) | `estoque.test.js` (dados preservados, backup, idempotência) + cópia do banco real | ✅ testado/verificado |
@@ -535,7 +535,7 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 
 ### Lista de verificação manual da Fase 6 (a ser executada pelo usuário)
 
-**Estado: PENDENTE — nenhuma etapa abaixo foi marcada como concluída. O assistente não abriu a interface no navegador.**
+**Estado: PARCIAL — o usuário validou manualmente o botão Atualizar (seção E2, 7 itens) e confirmou que a exportação CSV está corrigida e funcionando. As demais seções (A, B, C, D, E e F) continuam PENDENTES. O assistente não abriu a interface no navegador.**
 
 *Primeira execução:* reinicie o backend. Se o terminal mostrar `Migração: backup do banco gravado em …/backups/…`, a migração foi aplicada e o backup existe.
 
@@ -569,7 +569,7 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 - [ ] **Indicadores por categoria:** a seção abre **recolhida**, com botão "Expandir" e seta para baixo; clicar mostra a tabela com **todas** as categorias (inclusive as omitidas do gráfico) e o botão passa a "Ocultar" com seta para cima; clicar de novo recolhe só essa seção (cards, gráficos e botões não mudam); funciona com Tab + Enter/Espaço e o foco é visível; em celular o cabeçalho da seção e o botão cabem na tela.
 - [ ] A **impressão / PDF** mostra a tabela por categoria completa mesmo com a seção recolhida, sem o botão Expandir.
 - [ ] Os números dos cards, dos gráficos da Home, dos gráficos do Relatório e da tabela são **iguais** (some as colunas da tabela e compare com os cards).
-- [ ] **Exportar produtos a vencer (CSV)** baixa `produtos-a-vencer-AAAA-MM-DD.csv`; abrir no Excel/LibreOffice: acentos corretos, **7 colunas** (Código, Nome, Categoria, Quantidade, Preço unitário, Data de validade, Valor estimado), **preço `5,99` e valor `149,75` cada um numa única célula** (sem colunas extras vazias ou desalinhadas), só os produtos a vencer e soma da última coluna igual ao valor em risco. *(Correção do CSV aplicada; abertura no Excel ainda não validada pelo usuário.)*
+- [ ] **Exportar produtos a vencer (CSV)** baixa `produtos-a-vencer-AAAA-MM-DD.csv`; abrir no Excel/LibreOffice: acentos corretos, **7 colunas** (Código, Nome, Categoria, Quantidade, Preço unitário, Data de validade, Valor estimado), **preço `5,99` e valor `149,75` cada um numa única célula** (sem colunas extras vazias ou desalinhadas), só os produtos a vencer e soma da última coluna igual ao valor em risco. *(Correção do CSV aplicada; o usuário confirmou que a exportação está corrigida e funcionando. A conferência específica da abertura no Excel/LibreOffice — 7 colunas, `5,99` numa única célula, soma — não foi confirmada explicitamente, por isso este item permanece desmarcado.)*
 - [ ] **Imprimir / Salvar como PDF** abre a impressão; na pré-visualização não aparecem menu, cabeçalho nem botões, e os gráficos aparecem com cores; salvar como PDF funciona.
 - [ ] Layout da tela em celular: tabela rola na horizontal dentro da própria caixa (sem rolar a página), gráficos legíveis.
 
@@ -580,13 +580,13 @@ Campo **Estoque mínimo (alerta)** no formulário (0 = sem alerta); selo **Estoq
 - [ ] O aviso "N produtos estão com estoque baixo" aparece na Home e no Relatório e some quando não há nenhum.
 
 **E2. Botão "Atualizar" da página Produtos**
-- [ ] Digite um código ou nome e clique em **Atualizar** imediatamente (sem esperar): a lista mostra o resultado do texto digitado, uma única vez, sem a lista "piscar" duas vezes.
-- [ ] Com busca, filtros e página 2 ou mais ativos, clique em **Atualizar**: nada do que você escolheu é apagado e continua na mesma página.
-- [ ] Altere um produto direto no banco (use um banco de teste) e clique em **Atualizar**: lista e cards de **Resumo do estoque** mostram os valores novos.
-- [ ] Crie uma categoria nova por fora e clique em **Atualizar**: ela aparece no seletor. Remova por fora a categoria que está selecionada: o filtro de categoria sai e aparece o aviso, com os outros filtros mantidos.
-- [ ] Exclua por fora produtos até a página atual deixar de existir: **Atualizar** leva à última página existente, sem mensagem de "nenhum produto" indevida.
-- [ ] Durante a atualização o botão mostra o indicador e "Atualizando…", não aceita novos cliques e continua com o foco do teclado (Tab/Enter/Espaço); os campos de busca e filtros continuam utilizáveis.
-- [ ] Com o backend parado: lista e indicadores mostram erro (sem números antigos); ao religar, **Atualizar** volta ao normal.
+- [x] Digite um código ou nome e clique em **Atualizar** imediatamente (sem esperar): a lista mostra o resultado do texto digitado, uma única vez, sem a lista "piscar" duas vezes.
+- [x] Com busca, filtros e página 2 ou mais ativos, clique em **Atualizar**: nada do que você escolheu é apagado e continua na mesma página.
+- [x] Altere um produto direto no banco (use um banco de teste) e clique em **Atualizar**: lista e cards de **Resumo do estoque** mostram os valores novos.
+- [x] Crie uma categoria nova por fora e clique em **Atualizar**: ela aparece no seletor. Remova por fora a categoria que está selecionada: o filtro de categoria sai e aparece o aviso, com os outros filtros mantidos.
+- [x] Exclua por fora produtos até a página atual deixar de existir: **Atualizar** leva à última página existente, sem mensagem de "nenhum produto" indevida.
+- [x] Durante a atualização o botão mostra o indicador e "Atualizando…", não aceita novos cliques e continua com o foco do teclado (Tab/Enter/Espaço); os campos de busca e filtros continuam utilizáveis.
+- [x] Com o backend parado: lista e indicadores mostram erro (sem números antigos); ao religar, **Atualizar** volta ao normal.
 
 **F. Regressão**
 - [ ] CRUD, busca, filtros, selos de validade, paginação, valores `R$ X,XX` e os 4 cards continuam funcionando; o layout desktop continua igual ao homologado.

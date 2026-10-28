@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { atualizarProduto, criarProduto, excluirProduto, listarCategorias, listarProdutos } from '../services/api'
 import { ROTULOS_SITUACAO } from '../components/SeloSituacao'
-import Indicadores from '../components/Indicadores'
+import IndicadoresAutonomo from '../components/IndicadoresAutonomo'
 import ProdutoCard from '../components/ProdutoCard'
 import ProdutoForm from '../components/ProdutoForm'
 import ConfirmarExclusao from '../components/ConfirmarExclusao'
@@ -14,6 +14,7 @@ export default function ProdutosPage() {
   const [busca, setBusca] = useState('')
   const [situacao, setSituacao] = useState('')
   const [categoria, setCategoria] = useState('')
+  const [estoque, setEstoque] = useState('')
   const [categorias, setCategorias] = useState([])
   const [erroCategorias, setErroCategorias] = useState('')
   const [pagina, setPagina] = useState(1)
@@ -43,7 +44,7 @@ export default function ProdutosPage() {
     setCarregando(true)
     setErro('')
     try {
-      const r = await listarProdutos({ busca, categoria, situacao, pagina, limite: POR_PAGINA })
+      const r = await listarProdutos({ busca, categoria, situacao, estoque, pagina, limite: POR_PAGINA })
       if (consulta === ultimaConsulta.current) setResultado(r)
     } catch (err) {
       if (consulta !== ultimaConsulta.current) return
@@ -52,7 +53,7 @@ export default function ProdutosPage() {
     } finally {
       if (consulta === ultimaConsulta.current) setCarregando(false)
     }
-  }, [busca, categoria, situacao, pagina])
+  }, [busca, categoria, situacao, estoque, pagina])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -80,7 +81,8 @@ export default function ProdutosPage() {
 
   const alterarSituacao = (valor) => { setSituacao(valor); setPagina(1) }
   const alterarCategoria = (valor) => { setCategoria(valor); setPagina(1) }
-  const filtrando = Boolean(busca || categoria || situacao)
+  const alterarEstoque = (valor) => { setEstoque(valor); setPagina(1) }
+  const filtrando = Boolean(busca || categoria || situacao || estoque)
 
   async function salvar(dados) {
     if (formulario.produto) {
@@ -150,6 +152,13 @@ export default function ProdutosPage() {
             </select>
           </div>
           <div className="filtro">
+            <label htmlFor="filtro-estoque">Estoque</label>
+            <select id="filtro-estoque" value={estoque} onChange={(e) => alterarEstoque(e.target.value)}>
+              <option value="">Todos</option>
+              <option value="baixo">Estoque baixo</option>
+            </select>
+          </div>
+          <div className="filtro">
             <label htmlFor="filtro-categoria">Categoria</label>
             <select
               id="filtro-categoria"
@@ -201,7 +210,7 @@ export default function ProdutosPage() {
       {/* Resumo do estoque: os mesmos indicadores da Home, sempre do estoque inteiro (não dos filtros). */}
       <aside className="painel" aria-labelledby="titulo-resumo">
         <h2 id="titulo-resumo">Resumo do estoque</h2>
-        <Indicadores versao={versaoIndicadores} />
+        <IndicadoresAutonomo versao={versaoIndicadores} />
       </aside>
 
       {formulario && (

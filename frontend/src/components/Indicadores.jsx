@@ -1,43 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { obterIndicadores } from '../services/api'
 import { centavosParaReais } from '../utils/moeda'
 import { formatarData } from '../utils/data'
 
 const plural = (n, singular, pluralTxt) => `${n} ${n === 1 ? singular : pluralTxt}`
 
 // Os quatro indicadores do PDF §6.3. Todos os números vêm da API (nada é calculado aqui);
-// o frontend só formata. `versao` muda quando produtos são alterados, para recarregar.
-export default function Indicadores({ versao = 0 }) {
-  const [dados, setDados] = useState(null)
-  const [erro, setErro] = useState('')
-  const [carregando, setCarregando] = useState(true)
-
-  const ultimaConsulta = useRef(0) // ignora respostas antigas que chegam fora de ordem
-
-  const carregar = useCallback(async () => {
-    const consulta = ++ultimaConsulta.current
-    setCarregando(true)
-    try {
-      const r = await obterIndicadores()
-      if (consulta !== ultimaConsulta.current) return
-      setDados(r)
-      setErro('')
-    } catch (err) {
-      if (consulta !== ultimaConsulta.current) return
-      setDados(null) // sem valores antigos ou inventados quando a API falha
-      setErro(err.message)
-    } finally {
-      if (consulta === ultimaConsulta.current) setCarregando(false)
-    }
-  }, [])
-
-  useEffect(() => { carregar() }, [carregar, versao])
+// o frontend só formata. Recebe o `estado` de useIndicadores ({ dados, erro, carregando, recarregar }).
+export default function Indicadores({ estado }) {
+  const { dados, erro, carregando, recarregar } = estado
 
   if (erro) {
     return (
       <div>
         <p role="alert" className="msg msg--erro">Não foi possível carregar os indicadores. {erro}</p>
-        <button type="button" className="btn" onClick={carregar}>Tentar novamente</button>
+        <button type="button" className="btn" onClick={recarregar}>Tentar novamente</button>
       </div>
     )
   }

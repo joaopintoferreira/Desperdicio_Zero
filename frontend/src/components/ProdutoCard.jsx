@@ -8,12 +8,15 @@ export default function ProdutoCard({ produto, onEditar, onExcluir }) {
     <li className="produto">
       <div className="produto__info">
         <strong>{produto.nome}</strong>
-        <SeloSituacao situacao={produto.situacao} />
+        <div className="selos">
+          <SeloSituacao situacao={produto.situacao} />
+          {produto.estoque_baixo && <span className="selo selo--estoque">Estoque baixo</span>}
+        </div>
         <span className="produto__meta">
           Código {produto.codigo} · {produto.categoria}
         </span>
         <span className="produto__meta">
-          Estoque: {produto.quantidade} · Validade: {formatarData(produto.data_validade)}
+          Estoque: {produto.quantidade}{produto.estoque_minimo > 0 ? ` (mínimo ${produto.estoque_minimo})` : ''} · Validade: {formatarData(produto.data_validade)}
         </span>
       </div>
       <div className="produto__preco">{centavosParaReais(produto.preco_unitario)}</div>

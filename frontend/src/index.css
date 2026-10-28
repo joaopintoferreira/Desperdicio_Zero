@@ -100,9 +100,6 @@ body {
 
 /* Responsivo (RNF08) */
 @media (max-width: 800px) {
-  .app { flex-direction: column; }
-  .sidebar { width: 100%; display: flex; gap: 8px; padding: 12px; }
-  .sidebar__marca { padding: 8px 12px; }
   .conteudo { grid-template-columns: 1fr; padding: 16px; }
 }
 
@@ -194,3 +191,108 @@ select:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 .barra, .paginacao { flex-wrap: wrap; }
 /* Diálogo em telas baixas (ex.: celular deitado): rola dentro dele em vez de cortar o formulário. */
 .modal { max-height: calc(100vh - 32px); overflow-y: auto; }
+
+/* ---- Fase 6: menu hambúrguer (telas pequenas) ---- */
+.menu-botao, .sidebar__fechar { display: none; }
+.sidebar__fundo { display: none; }
+.sidebar__topo { display: block; }
+
+.menu-botao, .sidebar__fechar {
+  align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0;
+  border: 1px solid var(--cor-borda); border-radius: 8px; background: var(--cor-card); color: var(--cor-texto); cursor: pointer;
+}
+.sidebar__fechar { border-color: #334155; background: transparent; color: var(--cor-sidebar-texto); }
+:is(.menu-botao, .sidebar__fechar):focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+.sidebar__fechar:focus-visible { outline-color: #93c5fd; }
+.sidebar__item:focus-visible { outline-color: #93c5fd; }
+
+@media (max-width: 800px) {
+  .app { display: block; }
+  .principal { width: 100%; }
+  .header { gap: 12px; justify-content: flex-start; }
+  .menu-botao { display: inline-flex; flex-shrink: 0; }
+  .header h1 { min-width: 0; overflow-wrap: anywhere; }
+
+  /* A barra vira uma gaveta à esquerda: fechada fica fora da tela e fora da ordem de foco. */
+  .sidebar {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 30;
+    width: min(280px, 85vw); overflow-y: auto;
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform 0.2s ease, visibility 0s linear 0.2s;
+  }
+  .sidebar--aberta { transform: none; visibility: visible; transition: transform 0.2s ease; }
+  .sidebar__topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 12px; }
+  .sidebar__topo .sidebar__marca { padding: 0 4px 0 12px; }
+  .sidebar__fechar { display: inline-flex; }
+  .sidebar__item { min-height: 44px; margin-bottom: 4px; }
+  .sidebar__fundo--visivel { display: block; position: fixed; inset: 0; z-index: 20; background: rgba(15, 23, 42, 0.55); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .sidebar--aberta { transition: none; }
+}
+
+/* ---- Fase 6: gráficos, relatório e estoque baixo ---- */
+.barra__acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.selos { display: flex; flex-wrap: wrap; gap: 6px; }
+.selo--estoque { background: #ffedd5; color: #7c2d12; border-color: #ea580c; }
+.msg--aviso { background: #ffedd5; color: #7c2d12; }
+
+.graficos { margin-top: 20px; }
+.graficos__cabecalho { margin: 0 0 12px; font-size: 1rem; }
+.graficos__grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.grafico { margin: 0; padding: 16px; background: var(--cor-fundo); border-radius: 10px; min-width: 0; }
+.grafico__titulo { font-weight: 700; font-size: 0.95rem; margin-bottom: 12px; }
+.grafico__nota { margin: 12px 0 0; font-size: 0.78rem; color: var(--cor-texto-suave); }
+
+.rosca { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.rosca__svg { width: 150px; height: 150px; flex-shrink: 0; }
+.rosca__trilho { stroke: var(--cor-borda); }
+.rosca__segmento--vencido { stroke: var(--cor-vencido); }
+.rosca__segmento--proximo { stroke: var(--cor-proximo); }
+.rosca__segmento--dentro { stroke: var(--cor-dentro); }
+.rosca__total { font-size: 26px; font-weight: 700; fill: var(--cor-texto); }
+.rosca__total-rotulo { font-size: 11px; fill: var(--cor-texto-suave); }
+
+.legenda { list-style: none; margin: 0; padding: 0; flex: 1 1 160px; min-width: 0; }
+.legenda__item { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; font-size: 0.88rem; }
+.legenda__marca { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; align-self: center; border: 2px solid; }
+.legenda__marca--vencido { background: var(--cor-vencido); border-color: var(--cor-vencido); }
+.legenda__marca--proximo { background: var(--cor-proximo); border-color: var(--cor-proximo); }
+.legenda__marca--dentro { background: var(--cor-dentro); border-color: var(--cor-dentro); }
+.legenda__texto { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.legenda__percentual { font-weight: 400; color: var(--cor-texto-suave); }
+
+.barras { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.barras__linha { display: grid; grid-template-columns: minmax(70px, 1fr) minmax(60px, 2fr) auto; gap: 8px; align-items: center; font-size: 0.88rem; }
+.barras__rotulo { overflow-wrap: anywhere; }
+.barras__trilho { display: block; height: 14px; border-radius: 7px; background: var(--cor-borda); overflow: hidden; }
+.barras__preenchimento { display: block; height: 100%; border-radius: 7px; background: var(--cor-proximo); border-right: 3px solid #a16207; }
+.barras__valor { white-space: nowrap; }
+
+.relatorio__explicacao { margin: 4px 0 8px; }
+.relatorio__definicoes { margin: 0 0 16px; padding-left: 20px; font-size: 0.88rem; color: var(--cor-texto-suave); }
+.so-impressao { display: none; }
+
+.tabela-rolagem { margin-top: 20px; overflow-x: auto; }
+.tabela { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.tabela caption { text-align: left; font-weight: 700; padding-bottom: 8px; }
+.tabela th, .tabela td { padding: 8px 10px; border-bottom: 1px solid var(--cor-borda); text-align: left; }
+.tabela thead th { background: var(--cor-fundo); font-size: 0.8rem; }
+.tabela__num { text-align: right !important; white-space: nowrap; }
+
+@media (max-width: 480px) {
+  .barras__linha { grid-template-columns: 1fr auto; }
+  .barras__trilho { grid-column: 1 / -1; order: 3; }
+}
+
+/* ---- Impressão / "Salvar como PDF" do relatório ---- */
+@media print {
+  .sidebar, .sidebar__fundo, .header, .nao-imprimir, .menu-botao { display: none !important; }
+  .so-impressao { display: block; margin: 0 0 8px; }
+  body { background: #fff; }
+  .app, .principal { display: block; }
+  .conteudo { display: block; padding: 0; }
+  .painel { border: 0; padding: 0; }
+  .indicador, .grafico, .tabela tr { break-inside: avoid; }
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

@@ -8,17 +8,19 @@ const CAMPOS = [
   { nome: 'codigo', rotulo: 'Código', tipo: 'text' },
   { nome: 'categoria', rotulo: 'Categoria', tipo: 'text' },
   { nome: 'quantidade', rotulo: 'Quantidade', tipo: 'number', min: 0, step: 1, inputMode: 'numeric' },
+  { nome: 'estoque_minimo', rotulo: 'Estoque mínimo (alerta)', tipo: 'number', min: 0, step: 1, inputMode: 'numeric', dica: '0 = sem alerta' },
   { nome: 'preco', rotulo: 'Preço unitário (R$)', tipo: 'text', inputMode: 'decimal', dica: 'Ex.: 5,99' },
   { nome: 'data_validade', rotulo: 'Data de validade', tipo: 'date' },
 ]
 
 function valoresIniciais(produto) {
-  if (!produto) return { nome: '', codigo: '', categoria: '', quantidade: '', preco: '', data_validade: '' }
+  if (!produto) return { nome: '', codigo: '', categoria: '', quantidade: '', estoque_minimo: '0', preco: '', data_validade: '' }
   return {
     nome: produto.nome,
     codigo: produto.codigo,
     categoria: produto.categoria,
     quantidade: String(produto.quantidade),
+    estoque_minimo: String(produto.estoque_minimo ?? 0),
     preco: centavosParaCampo(produto.preco_unitario),
     data_validade: produto.data_validade,
   }
@@ -30,6 +32,7 @@ function validarLocal(v) {
   for (const c of ['nome', 'codigo', 'categoria']) if (!v[c].trim()) e[c] = 'Campo obrigatório'
   if (v.quantidade === '') e.quantidade = 'Campo obrigatório'
   else if (!/^\d+$/.test(v.quantidade)) e.quantidade = 'Informe um número inteiro maior ou igual a 0'
+  if (v.estoque_minimo !== '' && !/^\d+$/.test(v.estoque_minimo)) e.estoque_minimo = 'Informe um número inteiro maior ou igual a 0'
   if (!v.preco.trim()) e.preco = 'Campo obrigatório'
   else if (reaisParaCentavos(v.preco) === null) e.preco = 'Informe um valor válido, sem negativos (ex.: 5,99)'
   if (!v.data_validade) e.data_validade = 'Campo obrigatório'
@@ -58,6 +61,7 @@ export default function ProdutoForm({ produto, onSalvar, onCancelar }) {
         codigo: valores.codigo.trim(),
         categoria: valores.categoria.trim(),
         quantidade: Number(valores.quantidade),
+        estoque_minimo: valores.estoque_minimo === '' ? 0 : Number(valores.estoque_minimo),
         preco_unitario: reaisParaCentavos(valores.preco), // reais -> centavos inteiros
         data_validade: valores.data_validade,
       })

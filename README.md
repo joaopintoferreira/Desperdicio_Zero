@@ -2,7 +2,7 @@
 
 Aplicação web Full Stack para **controle de estoque e de validade de produtos**, voltada a pequenos mercados, mercearias e minimercados. Projeto acadêmico.
 
-> **Estado atual: Fases 1, 2 e 3 homologadas (validação manual da Fase 3 informada pelo usuário). Fase 4 (indicadores e valor em risco) implementada e verificada por testes automatizados — a validação manual da Fase 4 está PENDENTE do usuário.** Fases 5 e 6 ainda não foram iniciadas.
+> **Estado atual: Fases 1 a 4 homologadas manualmente pelo usuário (informado). Fase 5 (testes de fronteira, consistência e refinamento) implementada e verificada por testes automatizados — a validação manual da Fase 5 está PENDENTE do usuário.** A Fase 6 (extras opcionais) não foi iniciada.
 
 ## Homologação da Fase 2
 
@@ -41,7 +41,7 @@ Pequenos mercados, mercearias, minimercados e estabelecimentos com produtos de p
 | ✅ Implementado e testado | RF01 cadastrar · RF02 listar (ordenado por validade) · RF03 editar com validação · RF04 excluir com confirmação · pesquisa por nome/código · paginação · validação (frontend e backend) |
 | ✅ Implementado e testado automaticamente (Fase 3); validação manual pendente | RF05 classificar vencido / a vencer / dentro da validade (`situacao`) · RF06 filtrar por situação e por categoria, combinados com busca e paginação · selo com cor **e** texto |
 | ✅ Implementado e testado automaticamente (Fase 4); validação manual pendente | Dashboard com 4 indicadores (total de produtos, vencidos, a vencer em 7 dias, valor estimado em risco) · RF07 valor em risco (RN04) |
-| ⏳ Pendente (Fase 5) | Testes de fronteira de validade, responsividade e mensagens refinadas |
+| ✅ Implementado e testado automaticamente (Fase 5); validação manual pendente | Testes de fronteira (datas, valores negativos, campos vazios), conferência dos indicadores contra a base, 5 defeitos corrigidos (3 de validação/entrada, 2 de interface), refinamentos de interface (ver [Fase 5](#fase-5--testes-e-refinamento)) |
 | 💡 Opcional (Fase 6) | Exportação CSV, relatório PDF, alerta de estoque baixo |
 
 ## 6. Tecnologias e justificativa
@@ -242,21 +242,32 @@ cd frontend && npm run build    # build de produção em frontend/dist
 
 ## 19. Testes e resultados obtidos
 
-Última execução (2026-10-27, Node 20.20.2), na conclusão da Fase 4:
+Última execução (2026-10-27, Node 20.20.2), na conclusão da Fase 5:
 
 | Comando | Resultado |
 |---|---|
-| `cd backend && npm test` | **109 de 109 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4) |
-| `cd frontend && npm test` | **5 de 5 passaram** |
+| `cd backend && npm test` | **162 de 162 passaram** (42 da Fase 2 + 46 da Fase 3 + 21 da Fase 4 + 53 da Fase 5) |
+| `cd frontend && npm test` | **10 de 10 passaram** (5 anteriores + 5 da Fase 5) |
 | `cd frontend && npm run build` | ✅ concluído |
 | Ponta a ponta com o banco SQLite real (curl), na Fase 2: criar → editar → reiniciar → consultar → excluir | ✅ dados persistiram após reinício; 400 e 404 em JSON conferidos |
 | Fase 3 com o **relógio real**, banco temporário (curl): produtos com validade ontem, hoje, +7 e +8 dias em São Paulo | ✅ `vencido`, `proximo`, `proximo`, `dentro`; filtros e `/categorias` coerentes |
 | Fase 4 com o relógio real, banco temporário (curl): exemplo do PDF (A 10×R$5,00, B 8×R$3,00, C vencido, D +8 dias) | ✅ `valor_em_risco` = 7400, `produtos_a_vencer` = 2, `produtos_vencidos` = 1, `total_produtos` = 4; após excluir A: 2400, 1, 1, 3. Banco vazio: tudo 0 |
+| Fase 5: indicadores e `situacao` conferidos contra um **oráculo independente** sobre uma **cópia** do banco de desenvolvimento (3 produtos reais) | ✅ API = oráculo (total 3, vencidos 1, a vencer 1, valor em risco R$ 149,75); o arquivo original não foi alterado (hash idêntico antes e depois) |
 | `APP_TIME_ZONE=Marte/Olimpo node src/server.js` | ✅ a API não inicia; mensagem clara e código de saída 1 |
 
 **Testes novos da Fase 3** (`backend/test/validade.test.js` e `filtros.test.js`, data de referência fixa em 2026-11-10, nunca o relógio real): limites ontem/hoje/+7/+8 (cenários PDF 5–8) e o exemplo do PDF (hoje = 10/10); virada de mês e de ano; 29/02 bissexto e ano não bissexto; datas inválidas; instante que cruza a meia-noite UTC e ainda é outro dia em São Paulo; fuso padrão, configurado e inválido; `situacao` em POST/GET/PUT/listagem; cada filtro isolado e todas as combinações com busca e paginação; total e metadados; 400 para situação inválida ou repetida; coerência `situacao` × filtro; ordenação estável; `/api/categorias` (vazia, distintas, ordem, reflexo de edição e exclusão). 
 
 **Testes novos da Fase 4** (`backend/test/indicadores.test.js`, data fixa 2026-11-10): sem produtos (cenário 16); exemplo do PDF = R$ 74,00 (cenário 15); janela inclusiva (ontem e +8 fora; hoje e +7 dentro); vencidos e "dentro" fora do valor; quantidade 0; preço 0; vários produtos conferidos com cálculo independente em BigInt; precisão em centavos (10 + 20 = 30); categorias distintas; editar quantidade, preço e validade; excluir; cadastro inválido ou duplicado não altera nada; API de listagem × indicadores (cenário 14); filtros da listagem não alteram os indicadores; método diferente de GET → 404; soma acima do limite seguro → 500 genérico; produto no limite máximo. A interface React **não** tem testes automatizados.
+
+**Testes novos da Fase 5** (`backend/test/fronteiras.test.js`, `consistencia.test.js`, `fluxos.test.js` e ampliação de `frontend/src/utils/moeda.test.js`):
+- *Datas:* anos 1900/2100 e vizinhos, regra dos séculos (1900 e 2100 não são bissextos, 2000 é), último dia de cada mês e o seguinte, dia/mês 00 e 13, formatos quase corretos (espaços, `/`, hora, dígitos de outro alfabeto), tipos que não são texto, extremos classificados, edição para data inválida.
+- *Valores:* zero aceito, negativos recusados, `-0`, limite superior exato e um acima, decimais, texto, booleanos, listas, números enormes.
+- *Texto:* vazio, espaços, tabulação, quebra de linha, tipos errados, tamanhos exatos e um acima, acentos/emoji/HTML, duplicidade ignorando espaços.
+- *Corpo e parâmetros:* corpo ausente/nulo/lista, 413, várias falhas de uma vez, campos desconhecidos e `situacao` enviada (ignorada), paginação absurda, ids fora do intervalo seguro, injeção SQL.
+- *Consistência (cenários PDF 14 e 15):* 5 conjuntos de 300 produtos pseudoaleatórios (semente fixa) com o cálculo da API comparado a um oráculo por diferença de dias; cada `situacao` de 250 produtos; cada filtro de situação; todas as datas de −3 a +12 dias; sequência de criar/editar/excluir.
+- *Fluxos (combinam vários cenários do PDF §12):* cadastrar → listar → filtrar → indicadores → editar → buscar → excluir; operações inválidas sem rastros; **o `server.js` real em processo separado** (health, persistência após reiniciar o processo, `APP_TIME_ZONE` válido e inválido, CORS padrão e `CORS_ORIGINS`).
+
+As suítes novas foram validadas também por **mutação**: ao quebrar de propósito uma regra (aceitar negativo, ano mínimo, janela de 6 ou 8 dias, soma errada, valor de vencidos, CORS curinga, paginação), os testes passaram a falhar; o código foi restaurado em seguida.
 
 Testes do backend usam banco `:memory:` ou arquivo temporário, nunca `backend/data`.
 
@@ -281,6 +292,10 @@ Testes do backend usam banco `:memory:` ou arquivo temporário, nunca `backend/d
 | RF07 / RN04 valor em risco (PDF cenário 15) | `indicadoresService.obter`, `GET /indicadores`, card "Valor estimado em risco" | `indicadores.test.js` (fórmula, janela, zeros, precisão, edição, exclusão) | ✅ testado (API) · UI: validação manual pendente |
 | PDF §6.3 / cenário 14: 4 indicadores calculados dos dados reais | `Indicadores.jsx` (Home e painel direito) | consistência API × listagem | ✅ testado (API) · UI: validação manual pendente |
 | RNF06 consistência dos indicadores | agregação SQL sobre `produtos`, recarga após CRUD | edição, exclusão e cadastro inválido | ✅ testado (API) · atualização na tela: validação manual pendente |
+| Fase 5 — fluxos principais, erros de validação, limites de datas (PDF §11) | validadores, serviços, rotas | `fluxos.test.js`, `fronteiras.test.js` | ✅ testado (API e processo real do servidor) |
+| Fase 5 — indicadores correspondem à base (PDF §11, RNF06) | `indicadoresService`, `validadeService` | `consistencia.test.js` (oráculo independente) + cópia da base real | ✅ testado/verificado |
+| Fase 5 — responsividade e mensagens (claude.md §7, RNF08) | `index.css`, `ProdutosPage`, `Indicadores` | — (sem teste de interface) | ⏳ validação manual pendente |
+| Fase 5 — documentação e apresentação (PDF §16, claude.md §10) | este README (seções 1–24, Fase 5) | — | ✅ escrito · conferência pelo usuário pendente |
 | PDF cenário 16 (vazio) / PDF §13 mensagens | zeros e `R$ 0,00`, estado de erro sem valores | banco vazio | ✅ API · UI pendente |
 | RNF08 responsividade | CSS com `@media` | — | ⚠️ não confirmada individualmente (validação geral da UI feita pelo usuário) |
 | RNF05 segurança básica | sem credenciais; CORS restrito | CORS testado | ✅ |
@@ -309,28 +324,121 @@ Use produtos de teste (e apague-os depois) e anote a data de hoje (fuso de São 
 - [x] Legibilidade: o selo é compreensível sem enxergar a cor (o texto basta) e tem contraste adequado; Tab alcança os seletores e a seleção funciona pelo teclado.
 - [x] Editar o produto de validade ontem para daqui a 8 dias atualiza o selo.
 
-### Lista de verificação manual da Fase 4 (a ser executada pelo usuário)
+### Lista de verificação manual da Fase 4 (executada pelo usuário)
 
-**Estado: PENDENTE — nenhuma etapa abaixo foi marcada como concluída. O assistente não abriu a interface no navegador.**
+**Estado: validada manualmente pelo usuário — todos os itens aprovados (informado pelo usuário; o assistente não abriu a interface no navegador).**
 
 Use produtos de teste (e apague-os depois). Para o cálculo independente, anote para cada produto quantidade, preço e validade, e a data de hoje (São Paulo).
 
-- [ ] Sem produtos elegíveis (banco vazio ou só vencidos/dentro da validade): "A vencer" = 0 e "Valor estimado em risco" = R$ 0,00, sem erro.
-- [ ] Cadastrar A: 10 un. a R$ 5,00 com validade daqui a 2 dias e B: 8 un. a R$ 3,00 com validade daqui a 7 dias → "A vencer em 7 dias" = 2 e "Valor estimado em risco" = **R$ 74,00** (50,00 + 24,00).
-- [ ] Cadastrar C vencido (ontem) e D com validade daqui a 8 dias, ambos com valores altos: o valor em risco **não muda**; "Produtos vencidos" sobe em 1 por C; "Total de produtos" soma todos.
-- [ ] Um produto com validade **hoje** conta em "A vencer" e entra no valor.
-- [ ] Um produto a vencer com quantidade 0 (ou preço R$ 0,00) conta em "A vencer" e soma R$ 0,00.
-- [ ] Conferir o resultado com uma conta própria (Σ quantidade × preço dos produtos a vencer) e com a lista filtrada por situação "A vencer".
-- [ ] Editar quantidade e preço de um produto a vencer: o painel do lado direito atualiza o valor após salvar (sem recarregar a página).
-- [ ] Editar a validade de um produto de "A vencer" para "Vencido": contagens e valor se ajustam.
-- [ ] Excluir um produto a vencer: contagens e valor se ajustam.
-- [ ] Valores aparecem como `R$ 1.234,56` (separador de milhar e vírgula decimal).
-- [ ] Usar busca, categoria e situação na lista: os indicadores **não** mudam.
-- [ ] Home: os 4 cards aparecem; o texto explica que é estimativa e não prejuízo; a data de referência é a de hoje.
-- [ ] Parar o backend e clicar em "Tentar novamente"/"Atualizar": aparece erro, sem valores antigos ou inventados.
-- [ ] Tela estreita (≈ 375 px): cards empilham, sem rolagem horizontal e com texto legível.
-- [ ] Os cards são compreensíveis sem cor (cada um tem título e texto); Tab alcança os botões.
-- [ ] Fases anteriores: cadastrar, editar, excluir, busca, filtros, selos e paginação continuam funcionando.
+- [x] Sem produtos elegíveis (banco vazio ou só vencidos/dentro da validade): "A vencer" = 0 e "Valor estimado em risco" = R$ 0,00, sem erro.
+- [x] Cadastrar A: 10 un. a R$ 5,00 com validade daqui a 2 dias e B: 8 un. a R$ 3,00 com validade daqui a 7 dias → "A vencer em 7 dias" = 2 e "Valor estimado em risco" = **R$ 74,00** (50,00 + 24,00).
+- [x] Cadastrar C vencido (ontem) e D com validade daqui a 8 dias, ambos com valores altos: o valor em risco **não muda**; "Produtos vencidos" sobe em 1 por C; "Total de produtos" soma todos.
+- [x] Um produto com validade **hoje** conta em "A vencer" e entra no valor.
+- [x] Um produto a vencer com quantidade 0 (ou preço R$ 0,00) conta em "A vencer" e soma R$ 0,00.
+- [x] Conferir o resultado com uma conta própria (Σ quantidade × preço dos produtos a vencer) e com a lista filtrada por situação "A vencer".
+- [x] Editar quantidade e preço de um produto a vencer: o painel do lado direito atualiza o valor após salvar (sem recarregar a página).
+- [x] Editar a validade de um produto de "A vencer" para "Vencido": contagens e valor se ajustam.
+- [x] Excluir um produto a vencer: contagens e valor se ajustam.
+- [x] Valores aparecem como `R$ 1.234,56` (separador de milhar e vírgula decimal).
+- [x] Usar busca, categoria e situação na lista: os indicadores **não** mudam.
+- [x] Home: os 4 cards aparecem; o texto explica que é estimativa e não prejuízo; a data de referência é a de hoje.
+- [x] Parar o backend e clicar em "Tentar novamente"/"Atualizar": aparece erro, sem valores antigos ou inventados.
+- [x] Tela estreita (≈ 375 px): cards empilham, sem rolagem horizontal e com texto legível.
+- [x] Os cards são compreensíveis sem cor (cada um tem título e texto); Tab alcança os botões.
+- [x] Fases anteriores: cadastrar, editar, excluir, busca, filtros, selos e paginação continuam funcionando.
+
+### Lista de verificação manual da Fase 5 (a ser executada pelo usuário)
+
+**Estado: PENDENTE — nenhuma etapa abaixo foi marcada como concluída. O assistente não abriu a interface no navegador.**
+
+Use produtos de teste e apague-os depois.
+
+- [ ] **Busca rápida:** digitar e apagar texto rapidamente na busca; a lista final corresponde ao texto que ficou no campo (sem resultado "antigo" aparecendo depois).
+- [ ] **Nome longo:** cadastrar um produto com nome de 120 letras sem espaços (ex.: `AAAA…`) e categoria longa; o card, o diálogo de exclusão e as mensagens quebram a linha e **não** geram rolagem horizontal, inclusive em tela estreita (≈ 375 px).
+- [ ] **Diálogo em tela baixa:** deixar a janela com pouca altura (ou celular deitado) e abrir "Novo produto": o diálogo rola e o botão **Salvar** continua alcançável.
+- [ ] **Valores negativos:** no formulário, quantidade `-1` e preço `-5` mostram mensagem em português e nada é gravado.
+- [ ] **Campos vazios:** salvar com tudo vazio mostra a mensagem "Campo obrigatório" em cada campo; nome só com espaços também é recusado.
+- [ ] **Datas:** data de validade vazia é recusada; testar 29/02 de ano bissexto (ex.: 29/02/2028, aceito) e de ano não bissexto (o seletor de data do navegador não deve permitir; se permitir, a API recusa com mensagem).
+- [ ] **Preço digitado:** `5,99`, `5.99` e `1.234,56` são aceitos e aparecem como `R$ 5,99` e `R$ 1.234,56`; `5 99`, `abc` e `1.000` são recusados com mensagem.
+- [ ] **Limites:** quantidade `1000001` é recusada pelo servidor com mensagem ("excede o limite permitido").
+- [ ] **Indicadores × lista:** com vários produtos, conferir que "A vencer", "Vencidos" e "Total" são iguais aos totais da lista filtrada por situação (ver "Página X de Y") e que o valor em risco confere com a conta feita à mão.
+- [ ] **Falha de comunicação:** com o backend parado, a lista e os indicadores mostram mensagem de erro (sem números antigos) e voltam ao normal ao religar e clicar em Atualizar/Tentar novamente.
+- [ ] **Mensagens de sucesso:** cadastrar, editar e excluir mostram a mensagem de sucesso correspondente; lista vazia mostra "Nenhum produto cadastrado" (ou a mensagem de filtros, se houver filtro ativo).
+- [ ] **Regressão:** CRUD, busca, filtros, selos, paginação, indicadores e o formato `R$ X,XX` continuam funcionando.
+
+## Fase 5 — Testes e refinamento
+
+**Escopo documental** (PDF §11 e `claude.md` §7): testar os fluxos principais · verificar erros de validação · testar os limites das datas · verificar se os indicadores correspondem aos dados da base · corrigir problemas de interface (responsividade e mensagens de erro) · preparar a apresentação e a documentação acadêmica. Não há funcionalidade nova de produto nesta fase.
+
+**Defeitos encontrados e corrigidos** (todos por testes de fronteira; cada um tem teste de regressão):
+
+| # | Defeito | Correção |
+|---|---|---|
+| 1 | `GET /api/produtos?pagina=1e20` (ou número gigante) devolvia **500** (`SQLITE_MISMATCH` no OFFSET) | `pagina` e `limite` aceitam só dígitos (rejeita `1e2`, `0x10`, ` 5`, `+5`), `pagina` ≤ 1.000.000; 400 em JSON |
+| 2 | `busca` repetida na URL (`?busca=a&busca=b`) era ignorada em silêncio | 400 em JSON, como `categoria` e `situacao` |
+| 3 | Frontend: `"5 99"` no preço (vírgula esquecida) virava R$ 599,00 | espaço só nas pontas e após `R$`; espaço no meio é recusado |
+| 4 | Frontend: resposta antiga da busca/indicadores podia sobrescrever a mais nova | só a consulta mais recente é usada |
+| 5 | Frontend: nome/categoria longos sem espaços e diálogo em tela baixa podiam estourar o layout | `overflow-wrap`, quebra de linha nas barras e rolagem interna no diálogo |
+
+Os itens 4 e 5 foram identificados por **leitura do código**, não por teste automatizado nem por inspeção no navegador; por isso estão no checklist manual da Fase 5.
+
+**Alteração de contrato:** `pagina`/`limite` passaram a ser estritos (apenas dígitos). Valores como `limite=1e2` ou `limite=0x10`, antes aceitos por acaso, agora devolvem 400.
+
+**Critérios de aceitação da Fase 5**
+- Fronteiras de datas (limites de ano, bissextos, fim de mês, formatos quase corretos) cobertas por testes — ✅ automatizado.
+- Valores negativos, limites, campos vazios e tipos errados recusados sem gravar — ✅ automatizado.
+- Indicadores e `situacao` iguais a um cálculo independente sobre conjuntos grandes e sobre uma cópia da base real — ✅ automatizado / verificado.
+- Fluxo principal completo e processo real do servidor (inclusive reinício e fuso) — ✅ automatizado.
+- Nenhum 500 para entradas inválidas do usuário nos parâmetros testados — ✅ automatizado.
+- Responsividade e mensagens na interface — ⏳ validação manual pendente.
+- Documentação acadêmica completa (PDF §16) — ✅ neste README; conferência pelo usuário pendente.
+
+### Requisitos não funcionais — situação
+
+| Código | Requisito | Situação |
+|---|---|---|
+| RNF01 | Usabilidade: interface simples, clara, intuitiva | Implementada; validada manualmente nas Fases 2–4 (informado pelo usuário) |
+| RNF02 | Organização em módulos e separação de responsabilidades | Implementada (rotas, controllers, services, models, validators; componentes React) |
+| RNF03 | Evitar duplicação de regras de negócio | Regras de validade e valor em risco só no backend; o frontend exibe `situacao` e os indicadores recebidos |
+| RNF04 | Validação no frontend e no backend | Backend: testado automaticamente; frontend: conveniência (vazios, negativos, tipos), sem teste de componente |
+| RNF05 | Segurança básica | Sem credenciais no repositório; CORS restrito e configurável; SQL parametrizado; erros 5xx sem detalhes internos — testado |
+| RNF06 | Indicadores iguais aos registros reais | Testado contra oráculo independente e contra cópia da base real |
+| RNF07 | Testabilidade: testes das regras e operações críticas | 162 testes de backend e 10 de frontend (utilitários) |
+| RNF08 | Responsividade | CSS responsivo (`@media`); validação manual pendente para a Fase 5 |
+
+### Diagrama de fluxo (requisição → regra → resposta)
+
+```mermaid
+flowchart TD
+  A[Usuário na interface React] -->|1. ação: listar, filtrar, salvar| B[services/api.js]
+  B -->|2. HTTP JSON| C{Rota Express}
+  C -->|dados inválidos| X[400/404/409 em JSON]
+  C --> D[Controller]
+  D --> E[Service: valida e aplica regras]
+  E -->|"hoje" no fuso configurado| F[validadeService<br/>RN01–RN03]
+  E --> G[Model: SQL parametrizado]
+  G --> H[(SQLite)]
+  H --> G --> E
+  E -->|"situacao"| D
+  E -->|"indicadoresService: RN04"| I[Σ quantidade × preço<br/>dos a vencer, em centavos]
+  D -->|3. resposta JSON| B
+  B -->|4. formata R$ e exibe| A
+  X --> B
+```
+
+### Resultados alcançados
+- Aplicação Full Stack funcional (React + Express + SQLite) com CRUD, pesquisa, paginação, classificação de validade (RN01–RN03), filtros por situação e categoria, dashboard com 4 indicadores e valor em risco (RN04).
+- Regras de negócio centralizadas no backend; valores monetários em centavos inteiros do banco à exibição.
+- 162 testes automatizados de backend e 10 de frontend, incluindo conferência por oráculo independente, testes de fronteira e do processo real do servidor; suítes críticas validadas por mutação.
+- Homologação manual pelo usuário das Fases 1 a 4 (informada); Fase 5 pendente.
+- Fases 1 a 5 sem funcionalidade fora do escopo documental (sem login, vendas, notificações, IA ou app móvel).
+
+### Melhorias futuras (não implementadas)
+- Fase 6 (opcionais): exportação CSV, relatório PDF e alerta de estoque baixo.
+- Valor financeiro dos vencidos em indicador separado e total de unidades em estoque (opcionais citados no PDF).
+- Janela de alerta configurável; busca sem diferenciar acentos; categoria como entidade própria.
+- Testes automatizados de componentes React e testes de interface em navegador.
+- Autenticação, histórico de movimentações e integração com leitor de código de barras ficariam fora do escopo atual e exigiriam decisão da equipe.
 
 ## 21. Resolução de problemas
 
@@ -346,6 +454,8 @@ Use produtos de teste (e apague-os depois). Para o cálculo independente, anote 
 ## 22. Limitações conhecidas
 
 - A interface foi validada manualmente pelo usuário, mas **não por testes automatizados**: os componentes React não têm testes. Responsividade, teclado e diálogos não foram confirmados individualmente.
+- `pagina`/`limite` são estritos (apenas dígitos; `pagina` ≤ 1.000.000).
+- A busca por palavra de um campo é feita com `LIKE`; códigos diferenciam maiúsculas de minúsculas ("abc" e "ABC" são códigos distintos).
 - O filtro de categoria é por igualdade exata (diferencia maiúsculas e acentos; "Bebidas" e "bebidas" são categorias distintas).
 - Os indicadores são do estoque inteiro (sem filtro por categoria) e o valor dos vencidos não é apresentado; o total de unidades em estoque não é exibido.
 - A interface de indicadores não tem teste automatizado de componente.
@@ -357,8 +467,8 @@ Use produtos de teste (e apague-os depois). Para o cálculo independente, anote 
 ## 23. Fases seguintes
 
 3. ✅ Classificação de validade (RN01–RN03), selo com texto e cor, filtros por situação e categoria — homologada (validação manual informada pelo usuário).
-4. ✅ Dashboard com 4 indicadores e valor em risco (RN04) — implementada e testada automaticamente; validação manual pendente.
-5. Testes de fronteira adicionais, responsividade, consistência dos indicadores.
+4. ✅ Dashboard com 4 indicadores e valor em risco (RN04) — homologada (validação manual informada pelo usuário).
+5. ✅ Testes de fronteira, consistência dos indicadores, refinamentos de interface — implementada e testada automaticamente; validação manual pendente.
 6. Opcionais: CSV, PDF, estoque baixo.
 
 ### Critérios de aceitação da Fase 4
@@ -380,4 +490,24 @@ Use produtos de teste (e apague-os depois). Para o cálculo independente, anote 
 
 ## 24. Apresentação/demonstração
 
-Roteiro sugerido: (1) mostrar a arquitetura (diagrama acima); (2) cadastrar um produto e tentar um com preço negativo; (3) pesquisar por nome e por código; (4) editar quantidade; (5) excluir com confirmação; (6) reiniciar o backend e mostrar que os dados persistem; (7) executar `npm test`. Referência visual: sidebar escura, cabeçalho claro, lista à esquerda e resumo à direita (aproveitando só o layout; vendas, lojas, carrinho e código de barras estão fora de escopo).
+**Para a banca (PDF §16):** problema e justificativa (seções 1–3), objetivos, requisitos funcionais e não funcionais ([tabela RNF](#requisitos-não-funcionais--situação) e rastreabilidade), regras de negócio (seção 10), arquitetura e diagrama de fluxo (seção 7 e [Fase 5](#fase-5--testes-e-refinamento)), modelo de dados (seção 9), tecnologias e justificativas (seção 6), testes realizados (seção 19), limitações (seção 22), resultados alcançados e melhorias futuras ([Fase 5](#fase-5--testes-e-refinamento)).
+
+**Demonstração sem mexer nos dados reais** — use um banco descartável:
+
+```bash
+cd backend  && DB_PATH=/tmp/demo.db npm start     # API com banco temporário
+cd frontend && npm run dev                        # UI em http://localhost:5173
+# ao terminar: rm /tmp/demo.db
+```
+
+Roteiro sugerido (≈ 8 min):
+1. **Arquitetura:** mostrar o diagrama de fluxo e a separação frontend/backend.
+2. **Cadastro e validação:** cadastrar um produto; tentar preço negativo, quantidade negativa, campos vazios e data impossível (30/02) e mostrar as mensagens.
+3. **Regras de validade:** cadastrar produtos com validade ontem, hoje, daqui a 7 e a 8 dias e mostrar os selos (texto + cor).
+4. **Indicadores:** mostrar os 4 cards; usar o exemplo do PDF (A: 10 × R$ 5,00 e B: 8 × R$ 3,00 a vencer → **R$ 74,00**) e explicar que é estimativa, não prejuízo.
+5. **Filtros e busca:** por categoria, situação, nome e código, combinados, com paginação.
+6. **Editar e excluir** (com confirmação) e ver os indicadores atualizarem.
+7. **Persistência:** reiniciar o backend e mostrar que os dados continuam.
+8. **Qualidade:** executar `cd backend && npm test` (162 testes) e `cd frontend && npm test`; citar a conferência por oráculo independente e a validação por mutação.
+
+Referência visual: sidebar escura, cabeçalho claro, lista à esquerda e resumo à direita (aproveitando só o layout; vendas, lojas, carrinho e código de barras estão fora de escopo).
